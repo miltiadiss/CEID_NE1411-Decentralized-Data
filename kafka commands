@@ -4,3 +4,8 @@
 
 
 trexoume auta ta 2 se 2 diaforetika cmd windows, MES ston kafka fakelo
+
+for chryssaa:
+$ bin/zookeeper-server-start.sh config/zookeeper.properties
+
+$ bin/kafka-server-start.sh config/server.properties
