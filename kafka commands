@@ -1,0 +1,6 @@
+.\bin\windows\zookeeper-server-start.bat .\config\zookeeper.properties
+
+.\bin\windows\kafka-server-start.bat .\config\server.properties
+
+
+trexoume auta ta 2 se 2 diaforetika cmd windows, MES ston kafka fakelo
