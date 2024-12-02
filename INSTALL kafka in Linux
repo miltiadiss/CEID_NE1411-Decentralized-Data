@@ -1,0 +1,35 @@
+sudo apt update && sudo apt upgrade -y
+sudo apt install openjdk-11-jdk -y
+java -version
+
+cd ~
+mkdir kafka && cd kafka
+
+wget https://archive.apache.org/dist/kafka/3.2.0/kafka_2.12-3.2.0.tgz
+
+ls -l kafka_2.12-3.2.0.tgz
+
+tar -xvzf kafka_2.12-3.2.0.tgz
+
+cd ~/kafka/kafka_2.12-3.2.0
+
+
+bin/zookeeper-server-start.sh config/zookeeper.properties
+
+bin/kafka-server-start.sh config/server.properties
+
+
+
+CREATE TOPIC
+cd ~/kafka/kafka_2.12-3.2.0
+bin/kafka-topics.sh --create --topic test-topic --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+bin/kafka-topics.sh --list --bootstrap-server localhost:9092
+
+
+PRODUCE MESSAGES
+bin/kafka-console-producer.sh --topic test-topic --bootstrap-server localhost:9092
+
+GRAPSE OTI THES, ctl+C
+
+CONSUME
+bin/kafka-console-consumer.sh --topic test-topic --from-beginning --bootstrap-server localhost:9092
