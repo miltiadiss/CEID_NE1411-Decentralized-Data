@@ -9,3 +9,52 @@ for chryssaa:
 $ bin/zookeeper-server-start.sh config/zookeeper.properties
 
 $ bin/kafka-server-start.sh config/server.properties
+
+================================================= KAFKA ==============================================================================
+1. download kafka 
+
+>wget https://dlcdn.apache.org/kafka/3.7.0/kafka_2.13-3.7.0.tgz
+
+2. Extract tar
+
+>tar -xzf kafka_2.13-3.7.0.tgz
+
+3.Change directory and go inside kafka folder 
+
+>cd kafka_2.13-3.5.0
+
+4.Edit config file.
+
+>vim config/server.properties
+
+change listeners value to below.
+
+listeners=PLAINTEXT://localhost:9092
+
+5. Start Zookeeper 
+
+>bin/zookeeper-server-start.sh config/zookeeper.properties
+
+6. Start Kafka server
+
+>bin/kafka-server-start.sh config/server.properties
+
+7.Create a topic 
+
+>bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic test_topic
+
+8. post message to the topic.
+
+>bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic test_topic
+
+9.Consume message 
+
+>bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test_topic --from-beginning
+
+10.List topics 
+
+>bin/kafka-topics.sh --list --bootstrap-server localhost:9092
+
+11. list Consumer group
+
+>bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
