@@ -182,31 +182,41 @@ def produce_data():
     Continuously fetch and produce data to Kafka topics with error handling.
     """
     print("Starting Kafka Producer...")
+    
+    # Track the last fetch times
+    last_weather_update = time.time()  # Last time weather data was fetched
+    last_station_update = time.time()  # Last time station data was fetched
+    
     try:
         while True:
             print("\n--- Fetching Data ---")
+            current_time = time.time()
             
-            # Weather API 
-            weather_data = fetch_data(weather_url)
-            if weather_data:
-                print("Weather data fetched successfully")
-                producer.produce('weather_topic', key='weather', value=json.dumps(weather_data), callback=delivery_report)
-            
-            # Station Info API 
-            station_info_data = fetch_data(station_info_url)
-            if station_info_data:
-                print("Station Info data fetched successfully")
-                producer.produce('station_info_topic', key='station_info', value=json.dumps(station_info_data), callback=delivery_report)
-            
-            # Station Status API 
-            station_status_data = fetch_data(station_status_url)
-            if station_status_data:
-                print("Station Status data fetched successfully")
-                producer.produce('station_status_topic', key='station_status', value=json.dumps(station_status_data), callback=delivery_report)
+            # Fetch Weather API every 1 hour (3600 seconds)
+            if current_time - last_weather_update >= 3600:  # 1 hour
+                weather_data = fetch_data(weather_url)
+                if weather_data:
+                    print("Weather data fetched successfully")
+                    producer.produce('weather_topic', key='weather', value=json.dumps(weather_data), callback=delivery_report)
+                    last_weather_update = current_time  # Update the last fetch time
+
+            # Fetch Station Info and Status API every 5 minutes (300 seconds)
+            if current_time - last_station_update >= 300:  # 5 minutes
+                station_info_data = fetch_data(station_info_url)
+                if station_info_data:
+                    print("Station Info data fetched successfully")
+                    producer.produce('station_info_topic', key='station_info', value=json.dumps(station_info_data), callback=delivery_report)
+
+                station_status_data = fetch_data(station_status_url)
+                if station_status_data:
+                    print("Station Status data fetched successfully")
+                    producer.produce('station_status_topic', key='station_status', value=json.dumps(station_status_data), callback=delivery_report)
+
+                last_station_update = current_time  # Update the last fetch time
             
             producer.flush()  # Ensure all messages are sent
-            print(f"Waiting 5 minutes before next data fetch...")
-            time.sleep(5 * 60)  # Wait for 5 minutes
+            print(f"Waiting for next fetch cycle...")
+            time.sleep(30)  # Sleep for 30 seconds before checking again
     
     except Exception as e:
         print(f"Unhandled exception: {e}")
