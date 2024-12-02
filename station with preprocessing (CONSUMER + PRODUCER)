@@ -1,0 +1,173 @@
+from confluent_kafka import Producer
+import json
+import requests
+import time
+import logging
+
+# Set up logging
+logging.basicConfig(filename='kafka_producer.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Callback function to handle delivery reports
+def delivery_report(err, msg):
+    if err is not None:
+        logging.error(f"Message delivery failed: {err}")
+        print(f"Message delivery failed: {err}")
+    else:
+        logging.info(f"Message delivered to {msg.topic()} [{msg.partition()}]")
+        print(f"Message delivered to {msg.topic()} [{msg.partition()}]")
+
+# Set up the Kafka producer
+producer = Producer({'bootstrap.servers': 'localhost:9092'})
+
+# Function to fetch data from the API with rate limiting and error handling
+def fetch_data(url):
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+        elif response.status_code == 429:  # Handle rate limit (Too Many Requests)
+            retry_after = int(response.headers.get("Retry-After", 10))  # Default retry after 10 seconds
+            logging.warning(f"Rate limit exceeded. Waiting for {retry_after} seconds...")
+            print(f"Rate limit exceeded. Waiting for {retry_after} seconds...")
+            time.sleep(retry_after)  # Wait for the suggested time
+            return fetch_data(url)  # Retry after waiting
+        else:
+            logging.error(f"API request failed with status code {response.status_code}: {response.text}")
+            print(f"API request failed with status code {response.status_code}: {response.text}")
+            return None
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Request failed: {str(e)}")
+        print(f"Request failed: {str(e)}")
+        return None
+
+# Example function to validate data before sending to Kafka
+def validate_data(data, required_keys):
+    if not data:
+        logging.error("No data received.")
+        print("No data received.")
+        return False
+    for key in required_keys:
+        if key not in data:
+            logging.error(f"Missing required key: {key}")
+            print(f"Missing required key: {key}")
+            return False
+    return True
+
+# Example data to send (simulated API data)
+station_info = {
+    "station_id": 1,
+    "name": "Station 1",
+    "location": "Dubai"
+}
+
+station_status = {
+    "station_id": 1,
+    "status": "available"
+}
+
+# Validate and send data to Kafka topic 'station_info_topic'
+if validate_data(station_info, ["station_id", "name", "location"]):
+    try:
+        producer.produce('station_info_topic', key='key1', value=json.dumps(station_info), callback=delivery_report)
+        logging.info("Message for 'station_info_topic' added.")
+        print("Message for 'station_info_topic' added.")
+    except Exception as e:
+        logging.error(f"Error sending message to 'station_info_topic': {e}")
+        print(f"Error sending message to 'station_info_topic': {e}")
+else:
+    logging.error("Invalid station_info data, skipping message sending.")
+
+# Validate and send data to Kafka topic 'station_status_topic'
+if validate_data(station_status, ["station_id", "status"]):
+    try:
+        producer.produce('station_status_topic', key='key2', value=json.dumps(station_status), callback=delivery_report)
+        logging.info("Message for 'station_status_topic' added.")
+        print("Message for 'station_status_topic' added.")
+    except Exception as e:
+        logging.error(f"Error sending message to 'station_status_topic': {e}")
+        print(f"Error sending message to 'station_status_topic': {e}")
+else:
+    logging.error("Invalid station_status data, skipping message sending.")
+
+# Wait for any outstanding messages to be delivered
+producer.flush()
+
+logging.info("Finished sending messages.")
+print("Finished sending messages.")
+
+
+
+
+
+CONSUMER: ..........................................
+from confluent_kafka import Consumer, KafkaException, KafkaError
+import json
+import logging
+
+# Set up logging
+logging.basicConfig(filename='kafka_consumer.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Set up the Kafka consumer
+consumer = Consumer({
+    'bootstrap.servers': 'localhost:9092',
+    'group.id': 'consumer_group',  # Consumer group for managing offsets
+    'auto.offset.reset': 'earliest',  # Start reading from the earliest message if no offset is found
+})
+
+# Subscribe to the topics
+consumer.subscribe(['station_info_topic', 'station_status_topic'])
+
+# Function to process the messages from Kafka
+def process_message(msg):
+    try:
+        # Parse the message
+        message_value = json.loads(msg.value().decode('utf-8'))
+
+        # Log the message based on the topic
+        if msg.topic() == 'station_info_topic':
+            logging.info(f"Received station info: {message_value}")
+            print(f"Received station info: {message_value}")
+        elif msg.topic() == 'station_status_topic':
+            logging.info(f"Received station status: {message_value}")
+            print(f"Received station status: {message_value}")
+        else:
+            logging.warning(f"Received message from unknown topic: {msg.topic()}")
+
+    except json.JSONDecodeError as e:
+        logging.error(f"Failed to decode JSON from message: {str(e)}")
+        print(f"Failed to decode JSON from message: {str(e)}")
+
+    except Exception as e:
+        logging.error(f"Error processing message: {str(e)}")
+        print(f"Error processing message: {str(e)}")
+
+# Main consumer loop
+try:
+    print("Consumer started, listening for messages...")
+
+    while True:
+        # Poll for new messages (blocking for up to 1 second)
+        msg = consumer.poll(timeout=1.0)
+
+        if msg is None:
+            # No message available within the timeout
+            continue
+        elif msg.error():
+            if msg.error().code() == KafkaError._PARTITION_EOF:
+                # End of partition, no new messages
+                logging.info(f"End of partition reached: {msg.topic()} [{msg.partition()}]")
+                print(f"End of partition reached: {msg.topic()} [{msg.partition()}]")
+            else:
+                raise KafkaException(msg.error())
+        else:
+            # Message received successfully
+            process_message(msg)
+
+except KeyboardInterrupt:
+    print("Consumer stopped manually.")
+
+finally:
+    # Close the consumer gracefully when exiting
+    consumer.close()
+    logging.info("Consumer closed.")
+    print("Consumer closed.")
