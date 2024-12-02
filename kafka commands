@@ -10,6 +10,11 @@ $ bin/zookeeper-server-start.sh config/zookeeper.properties
 
 $ bin/kafka-server-start.sh config/server.properties
 
+for maria
+bin/zookeeper-server-start.sh config/zookeeper.properties
+bin/kafka-server-start.sh config/server.properties
+
+
 ================================================= KAFKA ==============================================================================
 1. download kafka 
 
