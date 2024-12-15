@@ -79,34 +79,45 @@ weather_station_info = station_info_with_status \
     .join(weather_stream, "station_id") \
     .select("station_id", "name", "lat", "lon", "num_bikes_available", "num_docks_available", 
             "temp", "humidity", "wind.speed", "clouds.all", "precipitation", "utilization_rate", 
-            lit("Dubai").alias("city_name"))
+            lit("Dubai").alias("city_name"), "timestamp")
 
 # Generate hourly usage summaries with required fields
 hourly_usage_summary = weather_station_info \
     .withWatermark("timestamp", "1 hour") \
     .groupBy(window(col("timestamp"), "1 hour"), "city_name") \
     .agg(
-        avg("num_bikes_available").alias("avg_bikes_available"),
-        avg("num_docks_available").alias("avg_docks_available"),
-        avg("utilization_rate").alias("avg_utilization_rate"),
-        max("utilization_rate").alias("max_utilization_rate"),
-        min("utilization_rate").alias("min_utilization_rate"),
-        stddev("utilization_rate").alias("std_dev_utilization_rate"),
-        avg("temp").alias("avg_temp"),
-        avg("humidity").alias("avg_humidity"),
-        avg("wind.speed").alias("avg_wind_speed"),
-        avg("clouds.all").alias("avg_cloudiness"),
-        avg("precipitation").alias("avg_precipitation")
+        avg("utilization_rate").alias("average_docking_station_utilisation"),
+        max("utilization_rate").alias("max_docking_station_utilisation"),
+        min("utilization_rate").alias("min_docking_station_utilisation"),
+        stddev("utilization_rate").alias("std_dev_docking_station_utilisation"),
+        avg("temp").alias("temperature"),
+        avg("wind.speed").alias("wind_speed"),
+        avg("clouds.all").alias("cloudiness"),
+        avg("precipitation").alias("precipitation")
     )
 
+# Select only the required columns for final output
+final_output = hourly_usage_summary.select(
+    "window.start",  # This is the timestamp for the window
+    "city_name",
+    "temperature",
+    "wind_speed",
+    "precipitation",
+    "cloudiness",
+    "average_docking_station_utilisation",
+    "max_docking_station_utilisation",
+    "min_docking_station_utilisation",
+    "std_dev_docking_station_utilisation"
+)
+
 # Output hourly usage summary to console (for debugging and inspection)
-hourly_usage_query = hourly_usage_summary.writeStream \
+final_output_query = final_output.writeStream \
     .outputMode("complete") \
     .format("console") \
     .start()
 
 # Example: Saving the hourly usage summary to a database (e.g., PostgreSQL)
-hourly_usage_query = hourly_usage_summary.writeStream \
+final_output_query = final_output.writeStream \
     .foreachBatch(lambda df, epoch_id: 
                   df.write.format("jdbc")
                   .option("url", "jdbc:postgresql://localhost:5432/bike_usage")
