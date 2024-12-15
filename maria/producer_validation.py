@@ -180,12 +180,13 @@ def delivery_report(err, msg):
 def produce_data():
     """
     Continuously fetch and produce data to Kafka topics with error handling.
+    Sends data immediately when the script starts and then at specified intervals.
     """
     print("Starting Kafka Producer...")
     
     # Track the last fetch times
-    last_weather_update = time.time()  # Last time weather data was fetched
-    last_station_update = time.time()  # Last time station data was fetched
+    last_weather_update = 0  # Initialize to 0 to ensure immediate fetching
+    last_station_update = 0  # Initialize to 0 to ensure immediate fetching
     
     try:
         while True:
@@ -193,7 +194,7 @@ def produce_data():
             current_time = time.time()
             
             # Fetch Weather API every 1 hour (3600 seconds)
-            if current_time - last_weather_update >= 3600:  # 1 hour
+            if current_time - last_weather_update >= 3600 or last_weather_update == 0:  # 1 hour or first run
                 weather_data = fetch_data(weather_url)
                 if weather_data:
                     print("Weather data fetched successfully")
@@ -201,7 +202,7 @@ def produce_data():
                     last_weather_update = current_time  # Update the last fetch time
 
             # Fetch Station Info and Status API every 5 minutes (300 seconds)
-            if current_time - last_station_update >= 300:  # 5 minutes
+            if current_time - last_station_update >= 300 or last_station_update == 0:  # 5 minutes or first run
                 station_info_data = fetch_data(station_info_url)
                 if station_info_data:
                     print("Station Info data fetched successfully")
