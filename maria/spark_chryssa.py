@@ -7,7 +7,7 @@ KAFKA_BROKER = "localhost:9092"
 WEATHER_TOPIC = "weather_topic"
 STATION_INFO_TOPIC = "station_info_topic"
 STATION_STATUS_TOPIC = "station_status_topic"
-CITY_NAME = "YourCity"  # Replace with actual city name
+CITY_NAME = "Dubai"  # Replace with actual city name
 
 # Initialize Spark session
 spark = SparkSession.builder \
