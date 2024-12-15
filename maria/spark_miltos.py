@@ -1,6 +1,6 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StringType, DoubleType, IntegerType
-from pyspark.sql.functions import from_json, col, avg, count, window
+from pyspark.sql.functions import from_json, col, avg, max, min, stddev, window, lit
 
 # Kafka configuration
 KAFKA_BROKER = "localhost:9092"
@@ -20,7 +20,10 @@ weather_schema = StructType() \
          .add("humidity", DoubleType())) \
     .add("weather", StringType()) \
     .add("wind", StructType()
-         .add("speed", DoubleType()))
+         .add("speed", DoubleType())) \
+    .add("clouds", StructType()
+         .add("all", IntegerType())) \
+    .add("precipitation", StringType())  # Assuming precipitation is a string (e.g., "light", "heavy")
 
 station_info_schema = StructType() \
     .add("data", StructType()
@@ -75,38 +78,28 @@ station_info_with_status = station_info_with_status \
 weather_station_info = station_info_with_status \
     .join(weather_stream, "station_id") \
     .select("station_id", "name", "lat", "lon", "num_bikes_available", "num_docks_available", 
-            "temp", "humidity", "wind.speed", "utilization_rate")
+            "temp", "humidity", "wind.speed", "clouds.all", "precipitation", "utilization_rate", 
+            lit("Dubai").alias("city_name"))
 
-# Generate hourly usage summaries
+# Generate hourly usage summaries with required fields
 hourly_usage_summary = weather_station_info \
     .withWatermark("timestamp", "1 hour") \
-    .groupBy(window(col("timestamp"), "1 hour"), "station_id", "name") \
+    .groupBy(window(col("timestamp"), "1 hour"), "city_name") \
     .agg(
         avg("num_bikes_available").alias("avg_bikes_available"),
         avg("num_docks_available").alias("avg_docks_available"),
         avg("utilization_rate").alias("avg_utilization_rate"),
+        max("utilization_rate").alias("max_utilization_rate"),
+        min("utilization_rate").alias("min_utilization_rate"),
+        stddev("utilization_rate").alias("std_dev_utilization_rate"),
         avg("temp").alias("avg_temp"),
         avg("humidity").alias("avg_humidity"),
-        avg("wind.speed").alias("avg_wind_speed")
+        avg("wind.speed").alias("avg_wind_speed"),
+        avg("clouds.all").alias("avg_cloudiness"),
+        avg("precipitation").alias("avg_precipitation")
     )
 
-# Output streams to console (for debugging and inspection)
-weather_query = weather_stream.writeStream \
-    .outputMode("append") \
-    .format("console") \
-    .start()
-
-station_info_query = station_info_stream.writeStream \
-    .outputMode("append") \
-    .format("console") \
-    .start()
-
-station_status_query = station_status_stream.writeStream \
-    .outputMode("append") \
-    .format("console") \
-    .start()
-
-# Output hourly usage summary to console or database
+# Output hourly usage summary to console (for debugging and inspection)
 hourly_usage_query = hourly_usage_summary.writeStream \
     .outputMode("complete") \
     .format("console") \
