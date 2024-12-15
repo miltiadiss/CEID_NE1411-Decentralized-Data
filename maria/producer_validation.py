@@ -174,8 +174,8 @@ def delivery_report(err, msg):
         print(f"Message delivery FAILED: {err}")
         logger.error(f"Message delivery failed: {err}")
     else:
-        print(f"Message delivered to {msg.topic()} [{msg.partition()}]")
-        logger.info(f"Message delivered to {msg.topic()} [{msg.partition()}]")
+        print(f"Message delivered to {msg.topic()}")
+        logger.info(f"Message delivered to {msg.topic()}")
 
 def produce_data():
     """
