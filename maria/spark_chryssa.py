@@ -7,7 +7,7 @@ KAFKA_BROKER = "localhost:9092"
 WEATHER_TOPIC = "weather_topic"
 STATION_INFO_TOPIC = "station_info_topic"
 STATION_STATUS_TOPIC = "station_status_topic"
-
+CITY_NAME = "YourCity"  # Replace with actual city name
 
 # Initialize Spark session
 spark = SparkSession.builder \
@@ -123,16 +123,12 @@ final_hourly_summary = hourly_usage_summary \
         col("std_dev_utilization_rate").alias("std_dev_docking_station_utilisation")
     )
 
-# Save the hourly usage summary to a database
+# Save the hourly usage summary to a CSV
 final_hourly_summary.writeStream \
-    .foreachBatch(lambda df, epoch_id: 
-                  df.write.format("jdbc")
-                  .option("url", "jdbc:postgresql://localhost:5432/bike_usage")
-                  .option("dbtable", "hourly_usage_summary")
-                  .option("user", "username")
-                  .option("password", "password")
-                  .mode("append")
-                  .save()) \
+    .outputMode("append") \
+    .format("csv") \
+    .option("path", "output/hourly_usage_summary") \
+    .option("checkpointLocation", "output/checkpoint") \
     .start()
 
 # Wait for termination
