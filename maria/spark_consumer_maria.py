@@ -1,37 +1,27 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StringType, DoubleType, IntegerType, TimestampType
-from pyspark.sql.functions import from_json, col, expr, window
+from pyspark.sql.types import StructType, StringType, DoubleType, IntegerType
+from pyspark.sql.functions import from_json, col, avg, count, window, stddev, max, min
 
-# Kafka and Spark configuration
+# Kafka configuration
 KAFKA_BROKER = "localhost:9092"
 WEATHER_TOPIC = "weather_topic"
 STATION_INFO_TOPIC = "station_info_topic"
 STATION_STATUS_TOPIC = "station_status_topic"
-
-# Database configuration
-DB_URL = "jdbc:postgresql://localhost:5432/analytics"
-DB_TABLE = "hourly_usage_summary"
-DB_PROPERTIES = {
-    "user": "your_username",
-    "password": "your_password",
-    "driver": "org.postgresql.Driver"
-}
+CITY_NAME = "YourCity"  # Replace with actual city name
 
 # Initialize Spark session
 spark = SparkSession.builder \
-    .appName("KafkaSparkSQLAnalytics") \
-    .config("spark.jars", "/path/to/postgresql.jar") \
+    .appName("KafkaSparkConsumer") \
     .getOrCreate()
 
-# Define schemas
+# Define schemas for incoming JSON data
 weather_schema = StructType() \
     .add("main", StructType()
          .add("temp", DoubleType())
          .add("humidity", DoubleType())) \
     .add("weather", StringType()) \
     .add("wind", StructType()
-         .add("speed", DoubleType())) \
-    .add("timestamp", TimestampType())
+         .add("speed", DoubleType()))
 
 station_info_schema = StructType() \
     .add("data", StructType()
@@ -50,82 +40,99 @@ station_status_schema = StructType() \
               .add("num_docks_available", IntegerType()))) \
     .add("last_updated", IntegerType())
 
-# Function to process Kafka streams
+# Function to process Kafka stream
 def process_stream(topic, schema):
-    return spark.readStream \
+    kafka_stream = spark.readStream \
         .format("kafka") \
         .option("kafka.bootstrap.servers", KAFKA_BROKER) \
         .option("subscribe", topic) \
         .option("startingOffsets", "latest") \
-        .load() \
+        .load()
+
+    processed_stream = kafka_stream \
         .selectExpr("CAST(value AS STRING) as json") \
         .select(from_json(col("json"), schema).alias("data")) \
         .select("data.*")
 
-# Read and parse streams
-weather_stream = process_stream(WEATHER_TOPIC, weather_schema) \
-    .withColumnRenamed("main.temp", "temperature") \
-    .withColumnRenamed("main.humidity", "humidity") \
-    .withColumnRenamed("wind.speed", "wind_speed") \
-    .withColumn("timestamp", expr("current_timestamp()"))
+    return processed_stream
 
-station_info_stream = process_stream(STATION_INFO_TOPIC, station_info_schema) \
-    .withColumn("timestamp", expr("current_timestamp()"))
+# Process each topic
+weather_stream = process_stream(WEATHER_TOPIC, weather_schema)
+station_info_stream = process_stream(STATION_INFO_TOPIC, station_info_schema)
+station_status_stream = process_stream(STATION_STATUS_TOPIC, station_status_schema)
 
-station_status_stream = process_stream(STATION_STATUS_TOPIC, station_status_schema) \
-    .withColumn("timestamp", expr("current_timestamp()"))
+# Join station info with station status
+station_info_with_status = station_info_stream \
+    .join(station_status_stream, "station_id") \
+    .select("station_id", "name", "lat", "lon", "num_bikes_available", "num_docks_available")
 
-# Create temporary views for SparkSQL
-weather_stream.createOrReplaceTempView("weather")
-station_info_stream.createOrReplaceTempView("station_info")
-station_status_stream.createOrReplaceTempView("station_status")
+# Calculate utilization rate per station
+station_info_with_status = station_info_with_status \
+    .withColumn("utilization_rate", col("num_bikes_available") / (col("num_bikes_available") + col("num_docks_available")))
 
-# Query 1: Overall System Utilization with Weather Conditions
-overall_utilization_query = """
-    SELECT 
-        w.temperature,
-        w.humidity,
-        w.wind_speed,
-        SUM(ss.num_bikes_available) AS total_bikes_available,
-        SUM(ss.num_docks_available) AS total_docks_available,
-        SUM(ss.num_bikes_available) / SUM(ss.num_bikes_available + ss.num_docks_available) AS system_utilization_rate,
-        ss.timestamp
-    FROM 
-        weather AS w
-    JOIN 
-        station_status AS ss
-    ON 
-        w.timestamp = ss.timestamp
-    GROUP BY 
-        w.temperature, w.humidity, w.wind_speed, ss.timestamp
-"""
-overall_utilization = spark.sql(overall_utilization_query)
+# Correlate weather conditions with bike usage
+weather_station_info = station_info_with_status \
+    .join(weather_stream, "station_id") \
+    .select(
+        "station_id", "name", "lat", "lon", "num_bikes_available", "num_docks_available", 
+        "main.temp", "main.humidity", "wind.speed", "utilization_rate"
+    )
 
-# Query 2: Hourly Usage Summaries
-hourly_usage_query = """
-    SELECT 
-        station_id, 
-        SUM(num_bikes_available) AS total_bikes_in_use, 
-        SUM(num_docks_available) AS total_docks_available,
-        SUM(num_bikes_available) / SUM(num_bikes_available + num_docks_available) AS utilization_rate,
-        window(timestamp, '1 hour') AS time_window
-    FROM 
-        station_status
-    GROUP BY 
-        station_id, window(timestamp, '1 hour')
-"""
-hourly_usage_summary = spark.sql(hourly_usage_query)
+# Generate hourly usage summaries
+hourly_usage_summary = weather_station_info \
+    .withWatermark("timestamp", "1 hour") \
+    .groupBy(window(col("timestamp"), "1 hour"), "station_id", "name") \
+    .agg(
+        avg("num_bikes_available").alias("avg_bikes_available"),
+        avg("num_docks_available").alias("avg_docks_available"),
+        avg("utilization_rate").alias("avg_utilization_rate"),
+        avg("temp").alias("avg_temp"),
+        avg("humidity").alias("avg_humidity"),
+        avg("wind.speed").alias("avg_wind_speed"),
+        max("utilization_rate").alias("max_utilization_rate"),
+        min("utilization_rate").alias("min_utilization_rate"),
+        stddev("utilization_rate").alias("std_dev_utilization_rate")
+    )
 
-# Write overall utilization to console
-overall_utilization.writeStream \
-    .outputMode("append") \
-    .format("console") \
-    .start()
+# Overall city utilization dataframe
+city_utilization = hourly_usage_summary \
+    .groupBy("window") \
+    .agg(
+        avg("avg_utilization_rate").alias("city_avg_utilization"),
+        max("max_utilization_rate").alias("city_max_utilization"),
+        min("min_utilization_rate").alias("city_min_utilization"),
+        stddev("std_dev_utilization_rate").alias("city_std_dev_utilization"),
+        avg("avg_temp").alias("city_avg_temp"),
+        avg("avg_humidity").alias("city_avg_humidity"),
+        avg("avg_wind_speed").alias("city_avg_wind_speed")
+    )
 
-# Write hourly usage summaries to database
-hourly_usage_summary.writeStream \
-    .foreachBatch(lambda df, epoch_id: df.write.jdbc(DB_URL, DB_TABLE, mode="append", properties=DB_PROPERTIES)) \
-    .outputMode("append") \
+city_utilization = city_utilization \
+    .withColumn("city_name", col("city_name"))
+
+# Add required fields to hourly usage summary for storage
+final_hourly_summary = hourly_usage_summary \
+    .select(
+        col("window.start").alias("timestamp"),
+        col("city_name"),
+        col("avg_temp").alias("temperature"),
+        col("avg_wind_speed").alias("wind_speed"),
+        col("avg_utilization_rate").alias("average_docking_station_utilisation"),
+        col("max_utilization_rate").alias("max_docking_station_utilisation"),
+        col("min_utilization_rate").alias("min_docking_station_utilisation"),
+        col("std_dev_utilization_rate").alias("std_dev_docking_station_utilisation")
+    )
+
+# Save the hourly usage summary to a database
+final_hourly_summary.writeStream \
+    .foreachBatch(lambda df, epoch_id: 
+                  df.write.format("jdbc")
+                  .option("url", "jdbc:postgresql://localhost:5432/bike_usage")
+                  .option("dbtable", "hourly_usage_summary")
+                  .option("user", "username")
+                  .option("password", "password")
+                  .mode("append")
+                  .save()) \
     .start()
 
 # Wait for termination
