@@ -77,7 +77,15 @@ weatherStreamDF = spark.readStream \
     .option("subscribe", "weather_topic") \
     .load()
 
-y
+# Παίρνουμε τα δεδομένα καιρού
+weatherDF = weatherStreamDF.selectExpr("CAST(value AS STRING) as json") \
+    .select(
+        get_json_object(col("json"), "$.name").alias("city_name"),
+        get_json_object(col("json"), "$.main.temp").cast("double").alias("temperature"),
+        get_json_object(col("json"), "$.wind.speed").cast("double").alias("wind_speed"),
+        get_json_object(col("json"), "$.clouds.all").cast("int").alias("cloudiness"),
+        get_json_object(col("json"), "$.rain.1h").cast("double").alias("precipitation")
+    )
 
 # Κάνουμε join weatherDF με combinedDF χρησιμοποιώντας το city_name
 finalDF = combinedDF.join(weatherDF, on="city_name", how="inner")
