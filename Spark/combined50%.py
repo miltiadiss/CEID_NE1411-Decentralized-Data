@@ -1,6 +1,3 @@
-
-# https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html
-
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
@@ -70,6 +67,7 @@ stationStatusDF = spark.readStream \
 combinedDF = stationInfoDF.join(stationStatusDF, on="station_id", how="inner") \
     .withColumn("utilization_rate",
                 (col("num_bikes_available") / col("capacity")) * 100)  # Υπολογισμός του ποσοστού χρησιμοποίησης
+
 # Διαβάζουμε τα δεδομένα καιρού από Kafka
 weatherStreamDF = spark.readStream \
     .format("kafka") \
