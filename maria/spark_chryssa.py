@@ -1,134 +1,144 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StringType, DoubleType, IntegerType
-from pyspark.sql.functions import from_json, col, avg, count, window, stddev, max, min
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+from pyspark.sql.window import Window
+import datetime
 
-# Kafka configuration
-KAFKA_BROKER = "localhost:9092"
-WEATHER_TOPIC = "weather_topic"
-STATION_INFO_TOPIC = "station_info_topic"
-STATION_STATUS_TOPIC = "station_status_topic"
-CITY_NAME = "Dubai"  # Replace with actual city name
-
-# Initialize Spark session
+# Create SparkSession
 spark = SparkSession.builder \
-    .appName("KafkaSparkConsumer") \
+    .appName("KafkaMultiTopicStreaming") \
     .getOrCreate()
 
-# Define schemas for incoming JSON data
-weather_schema = StructType() \
-    .add("main", StructType()
-         .add("temp", DoubleType())
-         .add("humidity", DoubleType())) \
-    .add("weather", StringType()) \
-    .add("wind", StructType()
-         .add("speed", DoubleType()))
+# [Previous schema definitions remain the same...]
+stationInfoSchema = StructType([
+    StructField("station_id", StringType(), True),
+    StructField("name", StringType(), True),
+    StructField("lat", DoubleType(), True),
+    StructField("lon", DoubleType(), True),
+    StructField("capacity", IntegerType(), True),
+])
 
-station_info_schema = StructType() \
-    .add("data", StructType()
-         .add("stations", StructType()
-              .add("station_id", StringType())
-              .add("name", StringType())
-              .add("lat", DoubleType())
-              .add("lon", DoubleType()))) \
-    .add("last_updated", IntegerType())
+stationStatusSchema = StructType([
+    StructField("station_id", StringType(), True),
+    StructField("num_bikes_available", IntegerType(), True),
+    StructField("num_docks_available", IntegerType(), True),
+])
 
-station_status_schema = StructType() \
-    .add("data", StructType()
-         .add("stations", StructType()
-              .add("station_id", StringType())
-              .add("num_bikes_available", IntegerType())
-              .add("num_docks_available", IntegerType()))) \
-    .add("last_updated", IntegerType())
+dataSchema1 = StructType([StructField("stations", ArrayType(stationInfoSchema), True)])
+dataSchema2 = StructType([StructField("stations", ArrayType(stationStatusSchema), True)])
 
-# Function to process Kafka stream
-def process_stream(topic, schema):
-    kafka_stream = spark.readStream \
-        .format("kafka") \
-        .option("kafka.bootstrap.servers", KAFKA_BROKER) \
-        .option("subscribe", topic) \
-        .option("startingOffsets", "latest") \
-        .load()
+kafkaSchema1 = StructType([StructField("last_updated", IntegerType(), True), StructField("ttl", IntegerType(), True), StructField("data", dataSchema1, True)])
+kafkaSchema2 = StructType([StructField("last_updated", IntegerType(), True), StructField("ttl", IntegerType(), True), StructField("data", dataSchema2, True)])
 
-    processed_stream = kafka_stream \
-        .selectExpr("CAST(value AS STRING) as json") \
-        .select(from_json(col("json"), schema).alias("data")) \
-        .select("data.*")
-
-    return processed_stream
-
-# Process each topic
-weather_stream = process_stream(WEATHER_TOPIC, weather_schema)
-station_info_stream = process_stream(STATION_INFO_TOPIC, station_info_schema)
-station_status_stream = process_stream(STATION_STATUS_TOPIC, station_status_schema)
-
-# Join station info with station status
-station_info_with_status = station_info_stream \
-    .join(station_status_stream, "station_id") \
-    .select("station_id", "name", "lat", "lon", "num_bikes_available", "num_docks_available")
-
-# Calculate utilization rate per station
-station_info_with_status = station_info_with_status \
-    .withColumn("utilization_rate", col("num_bikes_available") / (col("num_bikes_available") + col("num_docks_available")))
-
-# Correlate weather conditions with bike usage
-weather_station_info = station_info_with_status \
-    .join(weather_stream, "station_id") \
+# [Previous DataFrame definitions remain the same...]
+# Read station information
+stationInfoDF = spark.readStream \
+    .format("kafka") \
+    .option("kafka.bootstrap.servers", "localhost:9092") \
+    .option("subscribe", "station_info_topic") \
+    .load() \
+    .selectExpr("CAST(value AS STRING) as json") \
+    .select(from_json(col("json"), kafkaSchema1).alias("data")) \
+    .select(explode("data.data.stations").alias("station")) \
     .select(
-        "station_id", "name", "lat", "lon", "num_bikes_available", "num_docks_available", 
-        "main.temp", "main.humidity", "wind.speed", "utilization_rate"
+        col("station.station_id").alias("station_id"),
+        col("station.name").alias("name"),
+        col("station.lat").alias("latitude"),
+        col("station.lon").alias("longitude"),
+        col("station.capacity").alias("capacity"),
+        lit("Dubai").alias("city_name")
     )
 
-# Generate hourly usage summaries
-hourly_usage_summary = weather_station_info \
-    .withWatermark("timestamp", "1 hour") \
-    .groupBy(window(col("timestamp"), "1 hour"), "station_id", "name") \
-    .agg(
-        avg("num_bikes_available").alias("avg_bikes_available"),
-        avg("num_docks_available").alias("avg_docks_available"),
-        avg("utilization_rate").alias("avg_utilization_rate"),
-        avg("temp").alias("avg_temp"),
-        avg("humidity").alias("avg_humidity"),
-        avg("wind.speed").alias("avg_wind_speed"),
-        max("utilization_rate").alias("max_utilization_rate"),
-        min("utilization_rate").alias("min_utilization_rate"),
-        stddev("utilization_rate").alias("std_dev_utilization_rate")
-    )
-
-# Overall city utilization dataframe
-city_utilization = hourly_usage_summary \
-    .groupBy("window") \
-    .agg(
-        avg("avg_utilization_rate").alias("city_avg_utilization"),
-        max("max_utilization_rate").alias("city_max_utilization"),
-        min("min_utilization_rate").alias("city_min_utilization"),
-        stddev("std_dev_utilization_rate").alias("city_std_dev_utilization"),
-        avg("avg_temp").alias("city_avg_temp"),
-        avg("avg_humidity").alias("city_avg_humidity"),
-        avg("avg_wind_speed").alias("city_avg_wind_speed")
-    )
-
-city_utilization = city_utilization \
-    .withColumn("city_name", col("city_name"))
-
-# Add required fields to hourly usage summary for storage
-final_hourly_summary = hourly_usage_summary \
+# Read station status with watermark
+stationStatusDF = spark.readStream \
+    .format("kafka") \
+    .option("kafka.bootstrap.servers", "localhost:9092") \
+    .option("subscribe", "station_status_topic") \
+    .load() \
+    .selectExpr("CAST(value AS STRING) as json", "timestamp as status_timestamp") \
+    .select(from_json(col("json"), kafkaSchema2).alias("data"), col("status_timestamp")) \
+    .select(explode("data.data.stations").alias("station"), col("status_timestamp")) \
     .select(
-        col("window.start").alias("timestamp"),
-        col("city_name"),
-        col("avg_temp").alias("temperature"),
-        col("avg_wind_speed").alias("wind_speed"),
-        col("avg_utilization_rate").alias("average_docking_station_utilisation"),
-        col("max_utilization_rate").alias("max_docking_station_utilisation"),
-        col("min_utilization_rate").alias("min_docking_station_utilisation"),
-        col("std_dev_utilization_rate").alias("std_dev_docking_station_utilisation")
+        col("station.station_id").alias("station_id"),
+        col("station.num_bikes_available").alias("num_bikes_available"),
+        col("station.num_docks_available").alias("num_docks_available"),
+        col("status_timestamp")
+    ) \
+    .withWatermark("status_timestamp", "5 minutes")
+
+# Read weather data with watermark
+weatherDF = spark.readStream \
+    .format("kafka") \
+    .option("kafka.bootstrap.servers", "localhost:9092") \
+    .option("subscribe", "weather_topic") \
+    .load() \
+    .selectExpr("CAST(value AS STRING) as json", "timestamp as weather_timestamp") \
+    .select(
+        get_json_object(col("json"), "$.name").alias("city_name"),
+        get_json_object(col("json"), "$.main.temp").cast("double").alias("temperature"),
+        get_json_object(col("json"), "$.wind.speed").cast("double").alias("wind_speed"),
+        get_json_object(col("json"), "$.clouds.all").cast("int").alias("cloudiness"),
+        get_json_object(col("json"), "$.rain.1h").cast("double").alias("precipitation"),
+        col("weather_timestamp")
+    ) \
+    .withWatermark("weather_timestamp", "5 minutes")
+
+# Join and process data
+stationMetricsDF = stationInfoDF.join(stationStatusDF, "station_id") \
+    .withColumn("utilization_rate",
+                (col("num_bikes_available") / col("capacity")) * 100) \
+    .withColumn("window", window(col("status_timestamp"), "10 minutes"))
+
+windowedStatsDF = stationMetricsDF.groupBy("city_name", "window") \
+    .agg(
+        avg("utilization_rate").alias("average_docking_station_utilisation"),
+        max("utilization_rate").alias("max_docking_station_utilisation"),
+        min("utilization_rate").alias("min_docking_station_utilisation"),
+        stddev("utilization_rate").alias("std_dev_docking_station_utilisation")
     )
 
-# Save the hourly usage summary to a CSV
-final_hourly_summary.writeStream \
+finalDF = windowedStatsDF.join(
+    weatherDF,
+    (windowedStatsDF.city_name == weatherDF.city_name) &
+    (windowedStatsDF.window.start <= weatherDF.weather_timestamp) &
+    (windowedStatsDF.window.end > weatherDF.weather_timestamp)
+) \
+.select(
+    col("window.start").alias("timestamp"),
+    windowedStatsDF.city_name,
+    col("temperature"),
+    col("wind_speed"),
+    col("precipitation"),
+    col("cloudiness"),
+    col("average_docking_station_utilisation"),
+    col("max_docking_station_utilisation"),
+    col("min_docking_station_utilisation"),
+    col("std_dev_docking_station_utilisation")
+)
+
+# Function to write DataFrame to CSV with timestamp in filename
+def writeToCSV(df, epoch_id):
+    # Get current timestamp for filename
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Write to CSV
+    df.write \
+        .mode("append") \
+        .csv(f"bike_usage_statistics/date={timestamp[:8]}", header=True)
+
+# Write to console for monitoring
+consoleQuery = finalDF.writeStream \
     .outputMode("append") \
-    .format("csv") \
-    .option("path", "output/hourly_usage_summary") \
-    .option("checkpointLocation", "output/checkpoint") \
+    .format("console") \
+    .trigger(processingTime='10 seconds') \
+    .option("truncate", "false") \
+    .start()
+
+# Write to CSV
+csvQuery = finalDF.writeStream \
+    .outputMode("append") \
+    .trigger(processingTime='10 seconds') \
+    .foreachBatch(writeToCSV) \
     .start()
 
 # Wait for termination
