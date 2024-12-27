@@ -1,0 +1,18 @@
+import pandas as pd
+from pyspark.sql import SparkSession
+from pyspark.ml import Pipeline
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.regression import LinearRegression
+from pyspark.ml.evaluation import RegressionEvaluator
+from pyspark.sql.functions import col, unix_timestamp, hour, dayofweek
+
+# Initialize Spark session
+spark = SparkSession.builder \
+    .appName("Docking Station Utilization Prediction") \
+    .getOrCreate()
+
+# Load data from CSV file
+df = spark.read.option("header", "true").csv("data.csv", inferSchema=True)
+
+# Show the first few rows of the data
+df.show(5)
