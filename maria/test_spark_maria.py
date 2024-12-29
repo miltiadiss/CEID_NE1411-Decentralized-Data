@@ -76,21 +76,18 @@ stationStatusDF = spark.readStream \
     ) \
     .withWatermark("status_timestamp", "30 minutes")
 
-weatherDF = spark.readStream \
+weatherRawDF = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "localhost:9092") \
     .option("subscribe", "weather_topic") \
     .load() \
-    .selectExpr("CAST(value AS STRING) as json") \
-    .select(from_json(col("json"), weatherSchema).alias("data")) \
-    .select(
-        col("data.main.temp").alias("temperature"),
-        col("data.main.humidity").alias("humidity"),
-        col("data.wind.speed").alias("wind_speed"),
-        col("data.weather")[0]["description"].alias("weather_description"),
-        from_unixtime(col("data.last_updated")).cast("timestamp").alias("weather_timestamp")  # Cast to TimestampType
-    ) \
-    .withWatermark("weather_timestamp", "1 hour")  # Apply watermarking
+    .selectExpr("CAST(value AS STRING) as json")
+
+weatherRawDF.writeStream \
+    .format("console") \
+    .outputMode("append") \
+    .start() \
+    .awaitTermination()
 
 
 # Join για υπολογισμό utilization rate
