@@ -101,9 +101,6 @@ next_hour_output_path = "/home/unix/ml/next_hour_prediction.csv"
 next_hour_pdf.to_csv(next_hour_output_path, index=False)
 
 # Print the results
-print(f"Root Mean Squared Error (RMSE): {rmse:.2f}")
-print(f"R-squared: {r2:.2f}")
-print(f"Test predictions saved to: {output_path}")
 print(f"Next hour prediction saved to: {next_hour_output_path}")
 print("\nNext hour prediction:")
 print(next_hour_pdf[["timestamp", "prediction"]].to_string(index=False))
