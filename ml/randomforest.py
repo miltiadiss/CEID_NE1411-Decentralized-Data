@@ -62,26 +62,29 @@ print(f"Mean Squared Error (MSE): {mse}")
 # Step 9: Save the Trained Model
 model_path = "/home/unix/ml/random_forest_model"
 rf_model.save(model_path)
-
 print(f"Model saved to {model_path}")
 
 # Step 10: Export Predictions for Visualization
 predictions_pd = predictions.select("label", "prediction").toPandas()
 
-# Create a chart comparing actual vs predicted values
-plt.figure(figsize=(10, 6))
-plt.plot(predictions_pd['label'], label="Actual", marker='o', linestyle='dashed', alpha=0.6)
-plt.plot(predictions_pd['prediction'], label="Predicted", marker='x', alpha=0.6)
-plt.title("Actual vs Predicted Utilization")
-plt.xlabel("Sample Index")
-plt.ylabel("Utilization")
-plt.legend()
-plt.show()
+# Save Predictions to Text File
+predictions_txt_path = "/home/unix/ml/predictions.txt"
+with open(predictions_txt_path, "w") as f:
+    f.write("Actual, Predicted\n")
+    for _, row in predictions_pd.iterrows():
+        f.write(f"{row['label']}, {row['prediction']}\n")
+print(f"Predictions saved at: {predictions_txt_path}")
 
 # Create a bar chart for MSE
 plt.figure(figsize=(5, 5))
 plt.bar(["MSE"], [mse], alpha=0.7, color='blue')
 plt.title("Model Mean Squared Error")
 plt.ylabel("MSE Value")
-plt.show()
 
+# Save the MSE chart to the specified path
+mse_chart_path = "/home/unix/ml/mse_chart.png"
+plt.savefig(mse_chart_path)
+print(f"MSE chart saved at: {mse_chart_path}")
+
+# Show the chart
+plt.show()
