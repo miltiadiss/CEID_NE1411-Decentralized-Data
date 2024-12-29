@@ -1,9 +1,9 @@
-# Import necessary libraries
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, hour, dayofweek, lit, unix_timestamp
+from pyspark.sql.functions import col, hour, dayofweek, unix_timestamp
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.regression import RandomForestRegressor
 from pyspark.ml.evaluation import RegressionEvaluator
+import matplotlib.pyplot as plt
 
 # Step 1: Create a SparkSession
 spark = SparkSession.builder \
@@ -11,8 +11,12 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 # Step 2: Load the dataset
-file_path = "/mnt/data/part-00169-ab9c2382-bb04-48b8-a9b8-4b242fcee5c0-c000.csv"  # Replace with your file path
+file_path = "/home/unix/ml/dataset.csv"
 df = spark.read.csv(file_path, header=True, inferSchema=True)
+
+# Debug: Display schema and sample data
+df.printSchema()
+df.show(5)
 
 # Step 3: Preprocessing and Feature Engineering
 # Handle timestamp to extract relevant time-based features
@@ -50,13 +54,34 @@ evaluator = RegressionEvaluator(labelCol="label", predictionCol="prediction", me
 rmse = evaluator.evaluate(predictions)
 print(f"Root Mean Squared Error (RMSE): {rmse}")
 
+# Compute MSE (Mean Squared Error)
+mse_evaluator = RegressionEvaluator(labelCol="label", predictionCol="prediction", metricName="mse")
+mse = mse_evaluator.evaluate(predictions)
+print(f"Mean Squared Error (MSE): {mse}")
+
 # Step 9: Save the Trained Model
-model_path = "/path_to_save_model/random_forest_model"  # Replace with the desired path
+model_path = "/home/unix/ml/random_forest_model"
 rf_model.save(model_path)
 
 print(f"Model saved to {model_path}")
 
-# Additional: Print All Predictions as a Pandas DataFrame (Optional)
-print("Exporting Predictions for Detailed Inspection...")
+# Step 10: Export Predictions for Visualization
 predictions_pd = predictions.select("label", "prediction").toPandas()
-print(predictions_pd.head(10))  # Print the first 10 rows of predictions
+
+# Create a chart comparing actual vs predicted values
+plt.figure(figsize=(10, 6))
+plt.plot(predictions_pd['label'], label="Actual", marker='o', linestyle='dashed', alpha=0.6)
+plt.plot(predictions_pd['prediction'], label="Predicted", marker='x', alpha=0.6)
+plt.title("Actual vs Predicted Utilization")
+plt.xlabel("Sample Index")
+plt.ylabel("Utilization")
+plt.legend()
+plt.show()
+
+# Create a bar chart for MSE
+plt.figure(figsize=(5, 5))
+plt.bar(["MSE"], [mse], alpha=0.7, color='blue')
+plt.title("Model Mean Squared Error")
+plt.ylabel("MSE Value")
+plt.show()
+
