@@ -6,5 +6,4 @@ pip install spark-sql-kafka-0-10
 pip install jsonschema
 pip install confluent-kafka
 pip install pyspark confluent-kafka
-
-
+pip install numpy
