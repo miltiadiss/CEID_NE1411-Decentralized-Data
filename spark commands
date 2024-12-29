@@ -2,4 +2,4 @@ wget https://dlcdn.apache.org/spark/spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz
 tar -xvzf spark-3.5.3-bin-hadoop3.tgz
 sudo mv spark-3.5.3-bin-hadoop3 /opt/spark
 spark-shell --version
-spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.2,org.apache.spark:spark-streaming-kafka-0-10_2.12:3.5.2 combinedtest.py
+spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3,org.apache.spark:spark-streaming-kafka-0-10_2.12:3.5.3 spark.py
