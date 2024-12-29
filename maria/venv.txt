@@ -7,6 +7,8 @@ pip install jsonschema
 pip install confluent-kafka
 pip install pyspark confluent-kafka
 pip install numpy
+pip install matplotlib
+
 
 for ml:
 deactivate
