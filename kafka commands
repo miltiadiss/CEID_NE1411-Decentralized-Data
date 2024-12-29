@@ -13,8 +13,6 @@ $ bin/kafka-server-start.sh config/server.properties
 for maria
 bin/zookeeper-server-start.sh config/zookeeper.properties
 bin/kafka-server-start.sh config/server.properties
-spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3 kafka.py
-
 
 ================================================= KAFKA ==============================================================================
 1. download kafka 
