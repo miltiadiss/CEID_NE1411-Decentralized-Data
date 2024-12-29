@@ -76,7 +76,6 @@ stationStatusDF = spark.readStream \
     ) \
     .withWatermark("status_timestamp", "30 minutes")
 
-# Weather Data
 weatherDF = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "localhost:9092") \
@@ -87,10 +86,12 @@ weatherDF = spark.readStream \
     .select(
         col("data.main.temp").alias("temperature"),
         col("data.main.humidity").alias("humidity"),
-        col("data.weather.description")[0].alias("description"),
         col("data.wind.speed").alias("wind_speed"),
-        col("data.timestamp").alias("weather_timestamp")
-    )
+        col("data.weather")[0]["description"].alias("weather_description"),
+        from_unixtime(col("data.last_updated")).cast("timestamp").alias("weather_timestamp")  # Cast to TimestampType
+    ) \
+    .withWatermark("weather_timestamp", "1 hour")  # Apply watermarking
+
 
 # Join για υπολογισμό utilization rate
 stationMetricsDF = stationInfoDF.join(stationStatusDF, "station_id") \
