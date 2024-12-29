@@ -4,87 +4,60 @@ from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.regression import RandomForestRegressor
 from pyspark.ml.evaluation import RegressionEvaluator
 import matplotlib.pyplot as plt
+import pandas as pd
+import os
 
-# Step 1: Create a SparkSession
+# Create a SparkSession
 spark = SparkSession.builder \
     .appName("BikeUtilizationPrediction") \
     .getOrCreate()
 
-# Step 2: Load the dataset
+# Load the dataset
 file_path = "/home/unix/ml/dataset.csv"
 df = spark.read.csv(file_path, header=True, inferSchema=True)
 
-# Debug: Display schema and sample data
-df.printSchema()
-df.show(5)
-
-# Step 3: Preprocessing and Feature Engineering
-# Handle timestamp to extract relevant time-based features
-df = df.withColumn("hour", hour(unix_timestamp("timestamp").cast("timestamp")))  # Extract hour
-df = df.withColumn("dayofweek", dayofweek(unix_timestamp("timestamp").cast("timestamp")))  # Extract day of the week
-
-# Handle missing values (e.g., fill precipitation with 0 if NaN)
+# Preprocessing and Feature Engineering
+df = df.withColumn("hour", hour(unix_timestamp("timestamp").cast("timestamp")))
+df = df.withColumn("dayofweek", dayofweek(unix_timestamp("timestamp").cast("timestamp")))
 df = df.fillna({"precipitation": 0})
 
-# Step 4: Select Features and Label
+# Select Features and Label
 feature_columns = ['temperature', 'wind_speed', 'precipitation', 'cloudiness', 'hour', 'dayofweek']
 assembler = VectorAssembler(inputCols=feature_columns, outputCol="features")
-
 df = assembler.transform(df)
-
-# Select the features and target label for training
 df = df.select(col("features"), col("average_docking_station_utilisation").alias("label"))
 
-# Step 5: Train-Test Split
+# Train-Test Split
 train_data, test_data = df.randomSplit([0.8, 0.2], seed=42)
 
-# Step 6: Build and Train the Random Forest Model
+# Build and Train the Random Forest Model
 rf = RandomForestRegressor(featuresCol="features", labelCol="label", numTrees=100)
 rf_model = rf.fit(train_data)
 
-# Step 7: Make Predictions
+# Make Predictions
 predictions = rf_model.transform(test_data)
 
-# Display a few predictions for inspection
-print("Sample Predictions:")
-predictions.select("features", "label", "prediction").show(10)
-
-# Step 8: Evaluate the Model
-evaluator = RegressionEvaluator(labelCol="label", predictionCol="prediction", metricName="rmse")
-rmse = evaluator.evaluate(predictions)
-print(f"Root Mean Squared Error (RMSE): {rmse}")
-
-# Compute MSE (Mean Squared Error)
+# Evaluate the Model
 mse_evaluator = RegressionEvaluator(labelCol="label", predictionCol="prediction", metricName="mse")
 mse = mse_evaluator.evaluate(predictions)
-print(f"Mean Squared Error (MSE): {mse}")
 
-# Step 9: Save the Trained Model
-model_path = "/home/unix/ml/random_forest_model"
-rf_model.save(model_path)
-print(f"Model saved to {model_path}")
+# Create output directory if it doesn't exist
+output_dir = "/home/unix/ml"
+os.makedirs(output_dir, exist_ok=True)
 
-# Step 10: Export Predictions for Visualization
+# Save predictions to CSV
 predictions_pd = predictions.select("label", "prediction").toPandas()
+predictions_csv_path = os.path.join(output_dir, "predictions.csv")
+predictions_pd.to_csv(predictions_csv_path, index=False)
 
-# Save Predictions to Text File
-predictions_txt_path = "/home/unix/ml/predictions.txt"
-with open(predictions_txt_path, "w") as f:
-    f.write("Actual, Predicted\n")
-    for _, row in predictions_pd.iterrows():
-        f.write(f"{row['label']}, {row['prediction']}\n")
-print(f"Predictions saved at: {predictions_txt_path}")
-
-# Create a bar chart for MSE
-plt.figure(figsize=(5, 5))
+# Create and save the MSE chart
+plt.figure(figsize=(8, 6))
 plt.bar(["MSE"], [mse], alpha=0.7, color='blue')
 plt.title("Model Mean Squared Error")
 plt.ylabel("MSE Value")
+plt.tight_layout()
 
-# Save the MSE chart to the specified path
-mse_chart_path = "/home/unix/ml/mse_chart.png"
-plt.savefig(mse_chart_path)
-print(f"MSE chart saved at: {mse_chart_path}")
-
-# Show the chart
-plt.show()
+# Save the MSE chart
+mse_chart_path = os.path.join(output_dir, "mse_chart.png")
+plt.savefig(mse_chart_path, dpi=300, bbox_inches='tight')
+plt.close()
