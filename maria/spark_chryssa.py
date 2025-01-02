@@ -64,7 +64,7 @@ stationStatusDF = spark.readStream \
         col("station.num_docks_available").alias("num_docks_available"),
         col("status_timestamp")
     ) \
-    .withWatermark("status_timestamp", "5 minutes")
+    .withWatermark("status_timestamp", "10 minutes")
 
 # Read weather data with watermark
 weatherDF = spark.readStream \
@@ -81,13 +81,13 @@ weatherDF = spark.readStream \
         get_json_object(col("json"), "$.rain.1h").cast("double").alias("precipitation"),
         col("weather_timestamp")
     ) \
-    .withWatermark("weather_timestamp", "5 minutes")
+    .withWatermark("weather_timestamp", "10 minutes")
 
 # Join and process data
 stationMetricsDF = stationInfoDF.join(stationStatusDF, "station_id") \
     .withColumn("utilization_rate",
                 (col("num_bikes_available") / col("capacity")) * 100) \
-    .withColumn("window", window(col("status_timestamp"), "10 minutes"))
+    .withColumn("window", window(col("status_timestamp"), "60 minutes"))
 
 windowedStatsDF = stationMetricsDF.groupBy("city_name", "window") \
     .agg(
