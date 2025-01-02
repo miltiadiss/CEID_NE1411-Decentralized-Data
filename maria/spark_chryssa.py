@@ -130,14 +130,14 @@ def writeToCSV(df, epoch_id):
 consoleQuery = finalDF.writeStream \
     .outputMode("append") \
     .format("console") \
-    .trigger(processingTime='10 seconds') \
+    .trigger(processingTime='10 minutes') \
     .option("truncate", "false") \
     .start()
 
 # Write to CSV
 csvQuery = finalDF.writeStream \
     .outputMode("append") \
-    .trigger(processingTime='10 seconds') \
+    .trigger(processingTime='10 minutes') \
     .foreachBatch(writeToCSV) \
     .start()
 
