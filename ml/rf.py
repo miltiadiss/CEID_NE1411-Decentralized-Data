@@ -26,7 +26,7 @@ schema = StructType([
 ])
 
 # Load dataset
-file_path = '/home/debian/spark-3.5.3-bin-hadoop3/saprk_data.csv'  # Path to the CSV file
+file_path = '/home/debian/spark-3.5.3-bin-hadoop3/spark_data.csv'  # Path to the CSV file
 bike_data = spark.read.csv(file_path, header=True, schema=schema)
 
 # Data Preprocessing
@@ -94,7 +94,7 @@ plt.plot(train_predictions_df.index, train_predictions_df["cumulative_mae"], lab
 plt.plot(train_predictions_df.index, train_predictions_df["cumulative_r2"], label="R²", color="green", linewidth=2)
 
 # Add labels, title, and legend
-plt.xlabel("Prediction Index")
+plt.xlabel("Training Data Samples")
 plt.ylabel("Metric Value")
 plt.title("Training Metrics Across All Predictions")
 plt.legend()
