@@ -72,6 +72,9 @@ rf_regressor = RandomForestRegressor(
 )
 rf_model = rf_regressor.fit(train_data)
 
+# Evaluate the model
+train_predictions = rf_model.transform(train_data)
+
 # Initialize evaluators
 evaluator_rmse = RegressionEvaluator(
     labelCol="average_docking_station_utilisation",
@@ -88,8 +91,6 @@ evaluator_r2 = RegressionEvaluator(
     predictionCol="prediction",
     metricName="r2"
 )
-
-train_predictions = lr_model.transform(train_data)
 
 # Evaluate on training data
 rmse_train = evaluator_rmse.evaluate(train_predictions)
