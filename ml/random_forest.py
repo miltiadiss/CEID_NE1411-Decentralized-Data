@@ -39,9 +39,6 @@ bike_data = bike_data.withColumn("timestamp", to_timestamp(col("timestamp"), "yy
 # Clean data by removing rows with NaN values in critical columns
 bike_data_cleaned = bike_data.dropna(subset=["timestamp", "temperature", "wind_speed", "precipitation", "cloudiness"])
 
-# Remove the column 'city_name_Dubai' and add 'city_name' column with constant value 'Dubai'
-bike_data_cleaned = bike_data_cleaned.drop("city_name_Dubai").withColumn("city_name", lit("Dubai"))
-
 # Feature Scaling
 feature_columns = ['temperature', 'wind_speed', 'precipitation', 'cloudiness']
 assembler = VectorAssembler(inputCols=feature_columns, outputCol="features")
