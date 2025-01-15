@@ -72,9 +72,6 @@ rf_regressor = RandomForestRegressor(
 )
 rf_model = rf_regressor.fit(train_data)
 
-# Evaluate the model
-predictions = rf_model.transform(test_data)
-
 # Initialize evaluators
 evaluator_rmse = RegressionEvaluator(
     labelCol="average_docking_station_utilisation",
@@ -92,15 +89,17 @@ evaluator_r2 = RegressionEvaluator(
     metricName="r2"
 )
 
-# Calculate metrics
-rmse = evaluator_rmse.evaluate(predictions)
-mae = evaluator_mae.evaluate(predictions)
-r2 = evaluator_r2.evaluate(predictions)
+train_predictions = lr_model.transform(train_data)
 
-print(f"Model Evaluation Metrics:")
-print(f"Root Mean Squared Error (RMSE): {rmse:.4f}")
-print(f"Mean Absolute Error (MAE): {mae:.4f}")
-print(f"R² (Coefficient of Determination): {r2:.4f}")
+# Evaluate on training data
+rmse_train = evaluator_rmse.evaluate(train_predictions)
+mae_train = evaluator_mae.evaluate(train_predictions)
+r2_train = evaluator_r2.evaluate(train_predictions)
+
+print(f"Training Metrics:")
+print(f"Root Mean Squared Error (RMSE): {rmse_train:.4f}")
+print(f"Mean Absolute Error (MAE): {mae_train:.4f}")
+print(f"R² (Coefficient of Determination): {r2_train:.4f}")
 
 # 1. Feature Distribution (Histograms for all features in the same window using subplots)
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))  # 2x2 grid for subplots
