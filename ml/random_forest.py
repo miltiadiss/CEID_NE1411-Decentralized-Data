@@ -60,11 +60,16 @@ data = data.select("scaled_features", "average_docking_station_utilisation")
 train_data, test_data = data.randomSplit([0.8, 0.2], seed=42)
 
 # Train Random Forest Regressor model
-rf_regressor = RandomForestRegressor(featuresCol="scaled_features", 
-                                     labelCol="average_docking_station_utilisation", 
-                                     numTrees=100,  # Number of trees in the forest
-                                     maxDepth=10,  # Maximum depth of the trees
-                                     seed=42)  # Random seed for reproducibility
+rf_regressor = RandomForestRegressor(
+    featuresCol="scaled_features",
+    labelCol="average_docking_station_utilisation",
+    numTrees=500,                # Start with 500 trees
+    maxDepth=30,                 # Moderate depth to balance performance
+    minInstancesPerNode=5,       # Ensure meaningful splits
+    maxBins=32,                  # Default binning
+    featureSubsetStrategy="auto", # Automatically select features
+    subsamplingRate=0.8          # Use 80% of data for each tree
+)
 rf_model = rf_regressor.fit(train_data)
 
 # Evaluate the model
