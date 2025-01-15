@@ -104,6 +104,43 @@ plt.tight_layout()
 # Show the plot
 plt.show()
 
+# 1. Feature Distribution (Histograms for all features in the same window using subplots)
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))  # 2x2 grid for subplots
+
+# Plot for temperature
+sns.histplot(bike_data.select("temperature").toPandas(), kde=True, ax=axes[0, 0])
+axes[0, 0].set_title("Distribution of Temperature")
+axes[0, 0].set_xlabel("Temperature")
+axes[0, 0].set_ylabel("Frequency")
+
+# Plot for wind_speed
+sns.histplot(bike_data.select("wind_speed").toPandas(), kde=True, ax=axes[0, 1])
+axes[0, 1].set_title("Distribution of Wind Speed")
+axes[0, 1].set_xlabel("Wind Speed")
+axes[0, 1].set_ylabel("Frequency")
+
+# Plot for precipitation
+sns.histplot(bike_data.select("precipitation").toPandas(), kde=True, ax=axes[1, 0])
+axes[1, 0].set_title("Distribution of Precipitation")
+axes[1, 0].set_xlabel("Precipitation")
+axes[1, 0].set_ylabel("Frequency")
+
+# Plot for cloudiness
+sns.histplot(bike_data.select("cloudiness").toPandas(), kde=True, ax=axes[1, 1])
+axes[1, 1].set_title("Distribution of Cloudiness")
+axes[1, 1].set_xlabel("Cloudiness")
+axes[1, 1].set_ylabel("Frequency")
+
+plt.tight_layout()  # Adjust layout for better spacing
+plt.show()
+
+# 2. Correlation Heatmap
+pandas_df = bike_data.select("temperature", "wind_speed", "precipitation", "cloudiness", "average_docking_station_utilisation").toPandas()
+plt.figure(figsize=(10, 6))
+sns.heatmap(pandas_df.corr(), annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5)
+plt.title("Correlation Heatmap")
+plt.show()
+
 # Get the last row and prepare next hour input
 last_row = bike_data.orderBy("timestamp", ascending=False).limit(1).collect()[0]
 current_timestamp = last_row['timestamp']
