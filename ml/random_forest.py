@@ -1,130 +1,131 @@
-from pyspark.sql import SparkSession
-from pyspark.ml.feature import VectorAssembler, StandardScaler
-from pyspark.ml.regression import RandomForestRegressor
-from pyspark.ml.evaluation import RegressionEvaluator
-from pyspark.sql.types import StructType, StructField, FloatType, TimestampType, StringType, IntegerType
-from pyspark.sql.functions import col, mean, to_timestamp
+import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.impute import SimpleImputer
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import TimeSeriesSplit
 from datetime import timedelta
 
-# Initialize Spark session
-spark = SparkSession.builder.appName("Bike Utilization Prediction").getOrCreate()
-
-# Define schema for the dataset
-schema = StructType([
-    StructField("timestamp", StringType(), True),
-    StructField("city_name", StringType(), True),
-    StructField("temperature", FloatType(), True),
-    StructField("wind_speed", FloatType(), True),
-    StructField("precipitation", FloatType(), True),
-    StructField("cloudiness", IntegerType(), True),
-    StructField("average_docking_station_utilisation", FloatType(), True),
-    StructField("max_docking_station_utilisation", FloatType(), True),
-    StructField("min_docking_station_utilisation", FloatType(), True),
-    StructField("std_dev_docking_station_utilisation", FloatType(), True)
-])
-
 # Load dataset
-file_path = '/home/debian/spark-3.5.3-bin-hadoop3/saprk_data.csv'  # Path to the CSV file
-bike_data = spark.read.csv(file_path, header=True, schema=schema)
+data = pd.read_csv('your_dataset.csv', parse_dates=['timestamp'])
 
-# Data Preprocessing
-# 1. Handle Missing Values
-# Fill missing values with the mean of the respective columns
-for column in ['temperature', 'wind_speed', 'precipitation', 'cloudiness']:
-    mean_value = bike_data.select(mean(col(column))).collect()[0][0]
-    bike_data = bike_data.fillna({column: mean_value})
+# 1. Handle non-numeric missing values in 'precipitation'
+# Replace string ' NULL' or any other representation of missing values with actual NaN
+data['precipitation'] = data['precipitation'].replace([' NULL', 'NaN', 'null', ''], np.nan)
 
-# 2. Convert 'timestamp' column to TimestampType
-bike_data = bike_data.withColumn("timestamp", to_timestamp(col("timestamp"), "yyyy-MM-dd HH:mm:ss"))
+# Convert 'precipitation' to numeric values, forcing errors to NaN
+data['precipitation'] = pd.to_numeric(data['precipitation'], errors='coerce')
 
-# 3. Feature Engineering
-# For now, we'll use the existing features.
+# Impute missing values for 'precipitation' using the median strategy
+imputer = SimpleImputer(strategy='median')
+data['precipitation'] = imputer.fit_transform(data[['precipitation']])
 
-# 4. Feature Scaling
-# We will scale the features (temperature, wind_speed, precipitation, cloudiness)
-feature_columns = ['temperature', 'wind_speed', 'precipitation', 'cloudiness']
-assembler = VectorAssembler(inputCols=feature_columns, outputCol="features")
-data = assembler.transform(bike_data)
+# 2. Feature Engineering
+# Extract time-based features from the 'timestamp' column
+data['hour'] = data['timestamp'].dt.hour
+data['day_of_week'] = data['timestamp'].dt.dayofweek
+data['month'] = data['timestamp'].dt.month
+data['is_weekend'] = data['day_of_week'].apply(lambda x: 1 if x >= 5 else 0)
 
-# Apply StandardScaler to scale the features
-scaler = StandardScaler(inputCol="features", outputCol="scaled_features")
-scaler_model = scaler.fit(data)
-data = scaler_model.transform(data)
+# Create lag features (lag of 1 hour)
+data['temperature_lag_1'] = data['temperature'].shift(1)
+data['wind_speed_lag_1'] = data['wind_speed'].shift(1)
+data['avg_docking_station_utilisation_lag_1'] = data['average_docking_station_utilisation'].shift(1)
 
-# Select the necessary columns
-data = data.select("scaled_features", "average_docking_station_utilisation")
+# Drop rows with NaN values created by lag features (first row will have NaN)
+data = data.dropna()
 
-# Split dataset into training and testing data
-train_data, test_data = data.randomSplit([0.8, 0.2], seed=42)
+# 3. Encoding Categorical Variables
+# One-Hot Encoding for 'city_name'
+encoder = OneHotEncoder(drop='first', sparse=False)
+city_encoded = pd.DataFrame(encoder.fit_transform(data[['city_name']]), columns=encoder.get_feature_names_out(['city_name']))
 
-# Train Random Forest Regressor model
-rf_regressor = RandomForestRegressor(
-    featuresCol="scaled_features",
-    labelCol="average_docking_station_utilisation",
-    numTrees=500,                # Start with 500 trees
-    maxDepth=30,                 # Moderate depth to balance performance
-    minInstancesPerNode=5,       # Ensure meaningful splits
-    maxBins=32,                  # Default binning
-    featureSubsetStrategy="auto", # Automatically select features
-    subsamplingRate=0.8          # Use 80% of data for each tree
-)
-rf_model = rf_regressor.fit(train_data)
+# Concatenate the encoded columns back to the original dataframe
+data = pd.concat([data, city_encoded], axis=1)
+data.drop('city_name', axis=1, inplace=True)
 
-# Evaluate the model
-train_predictions = rf_model.transform(train_data)
+# 4. Scaling the Features
+# Define the features and target
+X = data.drop(columns=['timestamp', 'temperature'])  # Drop timestamp and target column
+y = data['temperature']
 
-# Initialize evaluators
-evaluator_rmse = RegressionEvaluator(
-    labelCol="average_docking_station_utilisation",
-    predictionCol="prediction",
-    metricName="rmse"
-)
-evaluator_mae = RegressionEvaluator(
-    labelCol="average_docking_station_utilisation",
-    predictionCol="prediction",
-    metricName="mae"
-)
-evaluator_r2 = RegressionEvaluator(
-    labelCol="average_docking_station_utilisation",
-    predictionCol="prediction",
-    metricName="r2"
-)
+# Split the data into training and test sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
-# Evaluate on training data
-rmse_train = evaluator_rmse.evaluate(train_predictions)
-mae_train = evaluator_mae.evaluate(train_predictions)
-r2_train = evaluator_r2.evaluate(train_predictions)
+# Apply scaling to numerical features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
 
-print(f"Training Metrics:")
-print(f"Root Mean Squared Error (RMSE): {rmse_train:.4f}")
-print(f"Mean Absolute Error (MAE): {mae_train:.4f}")
-print(f"R² (Coefficient of Determination): {r2_train:.4f}")
+# 5. Model: Random Forest Regressor
+# Define the Random Forest Regressor model
+rf = RandomForestRegressor(random_state=42)
 
-# 1. Feature Distribution (Histograms for all features in the same window using subplots)
+# 6. Hyperparameter Tuning using GridSearchCV
+param_grid = {
+    'n_estimators': [100, 200],
+    'max_depth': [10, 20, None],
+    'min_samples_split': [2, 5],
+    'min_samples_leaf': [1, 2],
+    'bootstrap': [True, False]
+}
+
+# Perform GridSearchCV for hyperparameter tuning
+grid_search = GridSearchCV(estimator=rf, param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
+grid_search.fit(X_train_scaled, y_train)
+
+# Get the best model from GridSearchCV
+best_rf_model = grid_search.best_estimator_
+
+# 7. Evaluate the Model
+y_pred = best_rf_model.predict(X_test_scaled)
+
+# Calculate Mean Absolute Error (MAE), Root Mean Squared Error (RMSE), and R²
+mae = mean_absolute_error(y_test, y_pred)
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+r2 = r2_score(y_test, y_pred)
+
+print(f'Mean Absolute Error: {mae}')
+print(f'Root Mean Squared Error: {rmse}')
+print(f'R²: {r2}')
+
+# 8. Plotting the Metrics (MAE, RMSE, R²)
+metrics = {'MAE': mae, 'RMSE': rmse, 'R²': r2}
+plt.figure(figsize=(8, 5))
+plt.bar(metrics.keys(), metrics.values(), color=['blue', 'green', 'red'])
+plt.title('Model Evaluation Metrics')
+plt.ylabel('Score')
+plt.show()
+
+# 9. Feature Distribution (Histograms for all features in the same window using subplots)
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))  # 2x2 grid for subplots
 
 # Plot for temperature
-sns.histplot(bike_data.select("temperature").toPandas(), kde=True, ax=axes[0, 0])
+sns.histplot(data['temperature'], kde=True, ax=axes[0, 0])
 axes[0, 0].set_title("Distribution of Temperature")
 axes[0, 0].set_xlabel("Temperature")
 axes[0, 0].set_ylabel("Frequency")
 
 # Plot for wind_speed
-sns.histplot(bike_data.select("wind_speed").toPandas(), kde=True, ax=axes[0, 1])
+sns.histplot(data['wind_speed'], kde=True, ax=axes[0, 1])
 axes[0, 1].set_title("Distribution of Wind Speed")
 axes[0, 1].set_xlabel("Wind Speed")
 axes[0, 1].set_ylabel("Frequency")
 
 # Plot for precipitation
-sns.histplot(bike_data.select("precipitation").toPandas(), kde=True, ax=axes[1, 0])
+sns.histplot(data['precipitation'], kde=True, ax=axes[1, 0])
 axes[1, 0].set_title("Distribution of Precipitation")
 axes[1, 0].set_xlabel("Precipitation")
 axes[1, 0].set_ylabel("Frequency")
 
 # Plot for cloudiness
-sns.histplot(bike_data.select("cloudiness").toPandas(), kde=True, ax=axes[1, 1])
+sns.histplot(data['cloudiness'], kde=True, ax=axes[1, 1])
 axes[1, 1].set_title("Distribution of Cloudiness")
 axes[1, 1].set_xlabel("Cloudiness")
 axes[1, 1].set_ylabel("Frequency")
@@ -132,57 +133,38 @@ axes[1, 1].set_ylabel("Frequency")
 plt.tight_layout()  # Adjust layout for better spacing
 plt.show()
 
-# 2. Correlation Heatmap
-pandas_df = bike_data.select("temperature", "wind_speed", "precipitation", "cloudiness", "average_docking_station_utilisation").toPandas()
+# 10. Correlation Heatmap
+correlation_df = data[['temperature', 'wind_speed', 'precipitation', 'cloudiness', 'average_docking_station_utilisation']]
 plt.figure(figsize=(10, 6))
-sns.heatmap(pandas_df.corr(), annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5)
+sns.heatmap(correlation_df.corr(), annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5)
 plt.title("Correlation Heatmap")
 plt.show()
 
-# Define schema for the next hour prediction
-next_hour_schema = StructType([
-    StructField("timestamp", TimestampType(), True),
-    StructField("city_name", StringType(), True),
-    StructField("temperature", FloatType(), True),
-    StructField("wind_speed", FloatType(), True),
-    StructField("precipitation", FloatType(), True),
-    StructField("cloudiness", FloatType(), True),
-    StructField("hour_of_day", IntegerType(), True)  # Include hour_of_day as a feature
-])
-
-# Get the last row and prepare next hour input
-last_row = bike_data.orderBy("timestamp", ascending=False).limit(1).collect()[0]
+# 11. Get the last row and prepare next hour input
+last_row = data.iloc[-1]
 current_timestamp = last_row['timestamp']
-next_timestamp = current_timestamp + timedelta(hours=1)  # Increment by 1 hour
+next_timestamp = current_timestamp + timedelta(hours=1)
 
-# Create next hour data with updated timestamp
-next_hour_data = spark.createDataFrame([(
-    next_timestamp,  # Updated timestamp for next hour
-    last_row.city_name,
-    float(last_row.temperature + 1.0),  # Example: assume 1 degree increase
-    float(last_row.wind_speed),
-    float(last_row.precipitation) if last_row.precipitation is not None else 0.0,
-    float(last_row.cloudiness),
-    int(next_timestamp.hour)  # Adding hour_of_day as feature for the next hour
-)], schema=next_hour_schema)
+# Create next hour data with updated timestamp (example: assume 1 degree increase in temperature)
+next_hour_data = pd.DataFrame([{
+    'timestamp': next_timestamp,
+    'city_name': last_row['city_name'],
+    'temperature': last_row['temperature'] + 1.0,  # Example: assume 1 degree increase
+    'wind_speed': last_row['wind_speed'],
+    'precipitation': last_row['precipitation'] if pd.notna(last_row['precipitation']) else 0.0,
+    'cloudiness': last_row['cloudiness']
+}])
 
 # Prepare features for prediction
-next_hour_features = assembler.transform(next_hour_data)
+next_hour_features = next_hour_data.drop(columns=['timestamp'])  # Drop timestamp as it's not a feature
 
 # Scale the features for the next hour
-next_hour_scaled = scaler_model.transform(next_hour_features)
+next_hour_scaled = scaler.transform(next_hour_features)
 
 # Predict for next hour
-next_hour_prediction = rf_model.transform(next_hour_scaled)
+next_hour_prediction = best_rf_model.predict(next_hour_scaled)
 
-# Extract and display the prediction
-next_hour_result = next_hour_prediction.select(
-    "timestamp",  # This will now show the updated timestamp (next hour)
-    "city_name",
-    "temperature",
-    "wind_speed",
-    "precipitation",
-    "cloudiness",
-    "prediction"
-)
-next_hour_result.show()
+# Display the next hour prediction
+next_hour_result = next_hour_data.copy()
+next_hour_result['predicted_temperature'] = next_hour_prediction
+print(next_hour_result)
