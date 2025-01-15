@@ -62,8 +62,8 @@ train_data, test_data = data.randomSplit([0.8, 0.2], seed=42)
 rf_regressor = RandomForestRegressor(
     featuresCol="scaled_features",
     labelCol="average_docking_station_utilisation",
-    numTrees=500,
-    maxDepth=30,
+    numTrees=100,
+    maxDepth=10,
     minInstancesPerNode=5,
     maxBins=32,
     featureSubsetStrategy="auto",
