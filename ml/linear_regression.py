@@ -26,7 +26,7 @@ schema = StructType([
 ])
 
 # Load dataset
-file_path = '/home/debian/random_bike_utilization_data.csv'  # Path to the CSV file
+file_path = '/home/debian/spark-3.5.3-bin-hadoop3/spark_data.csv'  # Path to the CSV file
 bike_data = spark.read.csv(file_path, header=True, schema=schema)
 
 # Data Preprocessing
