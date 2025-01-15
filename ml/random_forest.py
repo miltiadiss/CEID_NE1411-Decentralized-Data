@@ -2,7 +2,7 @@ from pyspark.sql import SparkSession
 from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml.regression import RandomForestRegressor
 from pyspark.sql.types import StructType, StructField, FloatType, TimestampType, StringType, IntegerType
-from pyspark.sql.functions import col, mean, to_timestamp, lit
+from pyspark.sql.functions import col, mean, to_timestamp, lit, hour, dayofweek, when
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
@@ -39,8 +39,13 @@ bike_data = bike_data.withColumn("timestamp", to_timestamp(col("timestamp"), "yy
 # Clean data by removing rows with NaN values in critical columns
 bike_data_cleaned = bike_data.dropna(subset=["timestamp", "temperature", "wind_speed", "precipitation", "cloudiness"])
 
+# Feature Engineering for Time
+bike_data_cleaned = bike_data_cleaned.withColumn("hour_of_day", hour(col("timestamp")))
+bike_data_cleaned = bike_data_cleaned.withColumn("day_of_week", dayofweek(col("timestamp")))
+bike_data_cleaned = bike_data_cleaned.withColumn("is_weekend", when((col("day_of_week") == 1) | (col("day_of_week") == 7), 1).otherwise(0))
+
 # Feature Scaling
-feature_columns = ['temperature', 'wind_speed', 'precipitation', 'cloudiness']
+feature_columns = ['temperature', 'wind_speed', 'precipitation', 'cloudiness', 'hour_of_day', 'day_of_week', 'is_weekend']
 assembler = VectorAssembler(inputCols=feature_columns, outputCol="features")
 data = assembler.transform(bike_data_cleaned)
 
@@ -138,7 +143,7 @@ plt.tight_layout()  # Adjust layout for better spacing
 plt.show()
 
 # 2. Correlation Heatmap
-pandas_df = bike_data_cleaned.select("temperature", "wind_speed", "precipitation", "cloudiness", "average_docking_station_utilisation").toPandas()
+pandas_df = bike_data_cleaned.select("temperature", "wind_speed", "precipitation", "cloudiness", "hour_of_day", "day_of_week", "is_weekend", "average_docking_station_utilisation").toPandas()
 plt.figure(figsize=(10, 6))
 sns.heatmap(pandas_df.corr(), annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5)
 plt.title("Correlation Heatmap")
@@ -168,6 +173,11 @@ next_hour_data = spark.createDataFrame([(
     float(last_row.precipitation) if last_row.precipitation is not None else 0.0,
     float(last_row.cloudiness)
 )], schema=next_hour_schema)
+
+# Add time-based features for the next hour data
+next_hour_data = next_hour_data.withColumn("hour_of_day", hour(col("timestamp")))
+next_hour_data = next_hour_data.withColumn("day_of_week", dayofweek(col("timestamp")))
+next_hour_data = next_hour_data.withColumn("is_weekend", when((col("day_of_week") == 1) | (col("day_of_week") == 7), 1).otherwise(0))
 
 # Prepare features for prediction
 next_hour_features = assembler.transform(next_hour_data)
