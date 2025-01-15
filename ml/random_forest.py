@@ -2,7 +2,8 @@ from pyspark.sql import SparkSession
 from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml.regression import RandomForestRegressor
 from pyspark.sql.types import StructType, StructField, FloatType, TimestampType, StringType, IntegerType
-from pyspark.sql.functions import col, mean, to_timestamp, lit, hour, dayofweek, when
+from pyspark.sql.functions import col, mean, to_timestamp, lit, hour, dayofweek, when, lag
+from pyspark.sql.window import Window
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
@@ -44,8 +45,31 @@ bike_data_cleaned = bike_data_cleaned.withColumn("hour_of_day", hour(col("timest
 bike_data_cleaned = bike_data_cleaned.withColumn("day_of_week", dayofweek(col("timestamp")))
 bike_data_cleaned = bike_data_cleaned.withColumn("is_weekend", when((col("day_of_week") == 1) | (col("day_of_week") == 7), 1).otherwise(0))
 
+# Define a window partitioned by city_name and ordered by timestamp
+window_spec = Window.partitionBy("city_name").orderBy("timestamp")
+
+# Add lagged features
+bike_data_cleaned = bike_data_cleaned.withColumn(
+    "average_docking_station_utilisation_lag1",
+    lag("average_docking_station_utilisation", 1).over(window_spec)
+)
+bike_data_cleaned = bike_data_cleaned.withColumn(
+    "average_docking_station_utilisation_lag2",
+    lag("average_docking_station_utilisation", 2).over(window_spec)
+)
+
+# Drop rows with null lagged values (e.g., first few rows in each partition)
+bike_data_cleaned = bike_data_cleaned.dropna(
+    subset=["average_docking_station_utilisation_lag1", "average_docking_station_utilisation_lag2"]
+)
+
 # Feature Scaling
-feature_columns = ['temperature', 'wind_speed', 'precipitation', 'cloudiness', 'hour_of_day', 'day_of_week', 'is_weekend']
+feature_columns = [
+    'temperature', 'wind_speed', 'precipitation', 'cloudiness',
+    'hour_of_day', 'day_of_week', 'is_weekend',
+    'average_docking_station_utilisation_lag1',
+    'average_docking_station_utilisation_lag2'
+]
 assembler = VectorAssembler(inputCols=feature_columns, outputCol="features")
 data = assembler.transform(bike_data_cleaned)
 
@@ -179,6 +203,16 @@ next_hour_data = next_hour_data.withColumn("hour_of_day", hour(col("timestamp"))
 next_hour_data = next_hour_data.withColumn("day_of_week", dayofweek(col("timestamp")))
 next_hour_data = next_hour_data.withColumn("is_weekend", when((col("day_of_week") == 1) | (col("day_of_week") == 7), 1).otherwise(0))
 
+# Add lagged features for the next hour prediction
+next_hour_data = next_hour_data.withColumn(
+    "average_docking_station_utilisation_lag1",
+    lit(last_row.average_docking_station_utilisation)
+)
+next_hour_data = next_hour_data.withColumn(
+    "average_docking_station_utilisation_lag2",
+    lit(last_row.average_docking_station_utilisation_lag1)
+)
+
 # Prepare features for prediction
 next_hour_features = assembler.transform(next_hour_data)
 
@@ -189,13 +223,5 @@ next_hour_scaled = scaler_model.transform(next_hour_features)
 next_hour_prediction = rf_model.transform(next_hour_scaled)
 
 # Extract and display the prediction
-next_hour_result = next_hour_prediction.select(
-    "timestamp",
-    "city_name",
-    "temperature",
-    "wind_speed",
-    "precipitation",
-    "cloudiness",
-    "prediction"
-)
-next_hour_result.show()
+next_hour_result = next_hour_prediction.select("prediction").collect()
+print(f"Predicted utilization for the next hour ({next_timestamp}) is: {next_hour_result[0]['prediction']}")
