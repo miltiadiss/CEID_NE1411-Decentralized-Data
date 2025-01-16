@@ -12,4 +12,4 @@ all_data_spark = spark.read \
     .csv("bike_usage_statistics/date=*")
 
 # Εμφάνιση των δεδομένων
-all_data_spark.show()
+all_data_spark.show(all_data_spark.count(), truncate=False)
