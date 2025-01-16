@@ -165,22 +165,22 @@ axes[0, 1].set_xlabel("Wind Speed")
 axes[0, 1].set_ylabel("Frequency")
 
 # Plot for precipitation
-sns.histplot(bike_data_cleaned.select("precipitation").toPandas(), kde=False, ax=axes[1, 0])
+sns.histplot(bike_data_cleaned.select("precipitation").toPandas(), kde=True, ax=axes[1, 0])
 axes[1, 0].set_title("Distribution of Precipitation")
 axes[1, 0].set_xlabel("Precipitation")
 axes[1, 0].set_ylabel("Frequency")
 
-# Plot for cloudiness
-sns.histplot(bike_data_cleaned.select("cloudiness").toPandas(), kde=True, ax=axes[1, 1])
-axes[1, 1].set_title("Distribution of Cloudiness")
-axes[1, 1].set_xlabel("Cloudiness")
+# Plot for average docking station utilisation
+sns.histplot(bike_data_cleaned.select("average_docking_station_utilisation").toPandas(), kde=True, ax=axes[1, 1])
+axes[1, 1].set_title("Distribution of Average docking station utilisation")
+axes[1, 1].set_xlabel("Average docking station utilisation")
 axes[1, 1].set_ylabel("Frequency")
 
 plt.tight_layout()  # Adjust layout for better spacing
 plt.show()
 
 # 2. Correlation Heatmap
-pandas_df = bike_data_cleaned.select("temperature", "wind_speed", "precipitation", "cloudiness", "hour_of_day", "day_of_week", "is_weekend", "average_docking_station_utilisation").toPandas()
+pandas_df = bike_data_cleaned.select("temperature", "wind_speed", "precipitation", "average_docking_station_utilisation").toPandas()
 plt.figure(figsize=(10, 6))
 sns.heatmap(pandas_df.corr(), annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5)
 plt.title("Correlation Heatmap")
