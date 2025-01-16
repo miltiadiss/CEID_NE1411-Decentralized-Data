@@ -30,6 +30,19 @@ schema = StructType([
 file_path = '/home/debian/spark-3.5.3-bin-hadoop3/spark_data.csv'  # Path to the CSV file
 bike_data = spark.read.csv(file_path, header=True, schema=schema)
 
+# Calculate mean for 'precipitation' column
+mean_precipitation = bike_data.select(mean(col("precipitation"))).collect()[0][0]
+
+# Handle None case for mean_precipitation
+if mean_precipitation is None:
+    mean_precipitation = 0.0  # Assign default value
+
+# Ensure the value is of the correct type
+mean_precipitation = float(mean_precipitation)
+
+# Replace NULL values with the mean
+bike_data = bike_data.fillna({"precipitation": mean_precipitation})
+
 # Data Preprocessing
 for column in ['temperature', 'wind_speed', 'precipitation', 'cloudiness']:
     mean_value = bike_data.select(mean(col(column))).collect()[0][0]
@@ -152,7 +165,7 @@ axes[0, 1].set_xlabel("Wind Speed")
 axes[0, 1].set_ylabel("Frequency")
 
 # Plot for precipitation
-sns.histplot(bike_data_cleaned.select("precipitation").toPandas(), kde=True, ax=axes[1, 0])
+sns.histplot(bike_data_cleaned.select("precipitation").toPandas(), kde=False, ax=axes[1, 0])
 axes[1, 0].set_title("Distribution of Precipitation")
 axes[1, 0].set_xlabel("Precipitation")
 axes[1, 0].set_ylabel("Frequency")
