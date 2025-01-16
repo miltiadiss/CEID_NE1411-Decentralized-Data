@@ -1,3 +1,0 @@
-timestamp,city_name,temperature,wind_speed,precipitation,cloudiness,average_docking_station_utilisation,max_docking_station_utilisation,min_docking_station_utilisation,std_dev_docking_station_utilisation
-2024-12-27T10:30:00.000+02:00,Dubai,299.16,4.12,,0,29.05873405514782,100.0,0.0,21.87822873654142
-2024-12-27T10:30:00.000+02:00,Dubai,300.16,3.6,,0,29.05873405514782,100.0,0.0,21.87822873654142
