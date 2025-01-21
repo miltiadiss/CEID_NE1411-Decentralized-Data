@@ -213,6 +213,9 @@ wind_speed = float(input("Enter wind speed (m/s): "))
 precipitation = float(input("Enter precipitation (mm): "))
 cloudiness = int(input("Enter cloudiness (percentage): "))
 
+# Convert cloudiness to float
+cloudiness = float(cloudiness)
+
 # Get the last timestamp for the prediction
 last_row = bike_data.orderBy("timestamp", ascending=False).limit(1).collect()[0]
 current_timestamp = last_row['timestamp']
