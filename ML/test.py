@@ -55,7 +55,7 @@ bike_data_cleaned = bike_data.dropna(subset=["timestamp", "temperature", "wind_s
 
 # Select only the weather-related features and the target variable
 weather_feature_columns = [
-    'temperature', 'wind_speed', 'precipitation', 'cloudiness', 'average_docking_station_utilisation'
+    'temperature', 'wind_speed', 'precipitation', 'cloudiness'
 ]
 
 # Assemble features into a single vector column
