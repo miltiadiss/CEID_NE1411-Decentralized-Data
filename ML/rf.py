@@ -108,13 +108,13 @@ rf_regressor = RandomForestRegressor(
 )
 rf_model = rf_regressor.fit(train_data)
 
-# Evaluate the model on training data
+# Evaluate the model on the training data
 train_predictions = rf_model.transform(train_data)
 
-# Convert predictions to Pandas DataFrame
+# Convert predictions to Pandas DataFrame for further analysis
 train_predictions_df = train_predictions.select("prediction", "average_docking_station_utilisation").toPandas()
 
-# Calculate metrics for each prediction
+# Calculate additional metrics for each prediction
 train_predictions_df["absolute_error"] = abs(train_predictions_df["prediction"] - train_predictions_df["average_docking_station_utilisation"])
 train_predictions_df["squared_error"] = (train_predictions_df["prediction"] - train_predictions_df["average_docking_station_utilisation"]) ** 2
 
@@ -126,7 +126,7 @@ train_predictions_df["cumulative_r2"] = 1 - (
     / ((train_predictions_df["average_docking_station_utilisation"] - train_predictions_df["average_docking_station_utilisation"].mean()) ** 2).sum()
 )
 
-# Plot training metrics
+# Plot the training metrics
 plt.figure(figsize=(14, 8))
 
 # Plot RMSE
@@ -149,7 +149,48 @@ plt.tight_layout()
 # Show the plot
 plt.show()
 
-# 1. Feature Distribution (Histograms for all features in the same window using subplots)
+# Evaluate the model on validation data
+validation_predictions = rf_model.transform(validation_data)
+
+# Convert predictions to Pandas DataFrame
+validation_predictions_df = validation_predictions.select("prediction", "average_docking_station_utilisation").toPandas()
+
+# Calculate metrics for each prediction
+validation_predictions_df["absolute_error"] = abs(validation_predictions_df["prediction"] - validation_predictions_df["average_docking_station_utilisation"])
+validation_predictions_df["squared_error"] = (validation_predictions_df["prediction"] - validation_predictions_df["average_docking_station_utilisation"]) ** 2
+
+# Cumulative metrics calculations
+validation_predictions_df["cumulative_rmse"] = (validation_predictions_df["squared_error"].expanding().mean()) ** 0.5
+validation_predictions_df["cumulative_mae"] = validation_predictions_df["absolute_error"].expanding().mean()
+validation_predictions_df["cumulative_r2"] = 1 - (
+    validation_predictions_df["squared_error"].expanding().sum()
+    / ((validation_predictions_df["average_docking_station_utilisation"] - validation_predictions_df["average_docking_station_utilisation"].mean()) ** 2).sum()
+)
+
+# Plot validation metrics
+plt.figure(figsize=(14, 8))
+
+# Plot RMSE
+plt.plot(validation_predictions_df.index, validation_predictions_df["cumulative_rmse"], label="RMSE", color="blue", linewidth=2)
+
+# Plot MAE
+plt.plot(validation_predictions_df.index, validation_predictions_df["cumulative_mae"], label="MAE", color="orange", linewidth=2)
+
+# Plot R²
+plt.plot(validation_predictions_df.index, validation_predictions_df["cumulative_r2"], label="R²", color="green", linewidth=2)
+
+# Add labels, title, and legend
+plt.xlabel("Validation Data Samples")
+plt.ylabel("Metric Value")
+plt.title("Validation Metrics Across All Predictions")
+plt.legend()
+plt.grid(True, linestyle="--", alpha=0.7)
+plt.tight_layout()
+
+# Show the plot
+plt.show()
+
+# Features Distribution
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))  # 2x2 grid for subplots
 
 # Plot for temperature
@@ -170,16 +211,16 @@ axes[1, 0].set_title("Distribution of Precipitation")
 axes[1, 0].set_xlabel("Precipitation")
 axes[1, 0].set_ylabel("Frequency")
 
-# Plot for average docking station utilisation
+# Plot for average_docking_station_utilisation
 sns.histplot(bike_data_cleaned.select("average_docking_station_utilisation").toPandas(), kde=True, ax=axes[1, 1])
 axes[1, 1].set_title("Distribution of Average docking station utilisation")
 axes[1, 1].set_xlabel("Average docking station utilisation")
 axes[1, 1].set_ylabel("Frequency")
 
-plt.tight_layout()  # Adjust layout for better spacing
+plt.tight_layout()  
 plt.show()
 
-# 2. Correlation Heatmap
+# Correlation Heatmap
 pandas_df = bike_data_cleaned.select("temperature", "wind_speed", "precipitation", "average_docking_station_utilisation").toPandas()
 plt.figure(figsize=(10, 6))
 sns.heatmap(pandas_df.corr(), annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5)
