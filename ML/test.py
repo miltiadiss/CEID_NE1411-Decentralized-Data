@@ -6,6 +6,7 @@ from pyspark.sql.functions import col, mean, to_timestamp
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+from datetime import timedelta
 
 # Initialize Spark session
 spark = SparkSession.builder.appName("Bike Utilization Prediction").getOrCreate()
@@ -135,7 +136,7 @@ validation_predictions_df = validation_predictions.select("prediction", "average
 
 # Calculate metrics for each prediction
 validation_predictions_df["absolute_error"] = abs(validation_predictions_df["prediction"] - validation_predictions_df["average_docking_station_utilisation"])
-validationn_predictions_df["squared_error"] = (validation_predictions_df["prediction"] - validation_predictions_df["average_docking_station_utilisation"]) ** 2
+validation_predictions_df["squared_error"] = (validation_predictions_df["prediction"] - validation_predictions_df["average_docking_station_utilisation"]) ** 2
 
 # Cumulative metrics calculations
 validation_predictions_df["cumulative_rmse"] = (validation_predictions_df["squared_error"].expanding().mean()) ** 0.5
