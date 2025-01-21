@@ -208,6 +208,7 @@ plt.show()
 
 # Request user input for weather data for the next hour
 city_name = input("Enter city name: ")
+user_timestamp = input("Enter the date and time for prediction (YYYY-MM-DD HH:MM:SS): ")
 temperature = float(input("Enter the temperature: "))
 wind_speed = float(input("Enter wind speed: "))
 precipitation = float(input("Enter precipitation: "))
