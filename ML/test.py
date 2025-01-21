@@ -70,7 +70,7 @@ data = scaler_model.transform(data)
 data = data.select("scaled_features", "average_docking_station_utilisation")
 
 # Split dataset into training and test sets
-train_data, test_data = data.randomSplit([0.8, 0.2], seed=42)
+train_data, validation_data = data.randomSplit([0.8, 0.2], seed=42)
 
 # Train the Random Forest Regressor model
 rf_regressor = RandomForestRegressor(
@@ -127,7 +127,48 @@ plt.tight_layout()
 # Show the plot
 plt.show()
 
-# 1. Feature Distribution (Histograms for weather features)
+# Evaluate the model on validation data
+validation_predictions = rf_model.transform(validation_data)
+
+# Convert predictions to Pandas DataFrame
+validation_predictions_df = validation_predictions.select("prediction", "average_docking_station_utilisation").toPandas()
+
+# Calculate metrics for each prediction
+validation_predictions_df["absolute_error"] = abs(validation_predictions_df["prediction"] - validation_predictions_df["average_docking_station_utilisation"])
+validationn_predictions_df["squared_error"] = (validation_predictions_df["prediction"] - validation_predictions_df["average_docking_station_utilisation"]) ** 2
+
+# Cumulative metrics calculations
+validation_predictions_df["cumulative_rmse"] = (validation_predictions_df["squared_error"].expanding().mean()) ** 0.5
+validation_predictions_df["cumulative_mae"] = validation_predictions_df["absolute_error"].expanding().mean()
+validation_predictions_df["cumulative_r2"] = 1 - (
+    validation_predictions_df["squared_error"].expanding().sum()
+    / ((validation_predictions_df["average_docking_station_utilisation"] - validation_predictions_df["average_docking_station_utilisation"].mean()) ** 2).sum()
+)
+
+# Plot validation metrics
+plt.figure(figsize=(14, 8))
+
+# Plot RMSE
+plt.plot(validation_predictions_df.index, train_predictions_df["cumulative_rmse"], label="RMSE", color="blue", linewidth=2)
+
+# Plot MAE
+plt.plot(validation_predictions_df.index, train_predictions_df["cumulative_mae"], label="MAE", color="orange", linewidth=2)
+
+# Plot R²
+plt.plot(validation_predictions_df.index, train_predictions_df["cumulative_r2"], label="R²", color="green", linewidth=2)
+
+# Add labels, title, and legend
+plt.xlabel("Validation Data Samples")
+plt.ylabel("Metric Value")
+plt.title("Validation Metrics Across All Predictions")
+plt.legend()
+plt.grid(True, linestyle="--", alpha=0.7)
+plt.tight_layout()
+
+# Show the plot
+plt.show()
+
+# Features Distribution
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))  # 2x2 grid for subplots
 
 # Plot for temperature
@@ -148,28 +189,35 @@ axes[1, 0].set_title("Distribution of Precipitation")
 axes[1, 0].set_xlabel("Precipitation")
 axes[1, 0].set_ylabel("Frequency")
 
-# Plot for average docking station utilisation
+# Plot for average_docking_station_utilisation
 sns.histplot(bike_data_cleaned.select("average_docking_station_utilisation").toPandas(), kde=True, ax=axes[1, 1])
-axes[1, 1].set_title("Distribution of Average Docking Station Utilisation")
-axes[1, 1].set_xlabel("Average Docking Station Utilisation")
+axes[1, 1].set_title("Distribution of Average docking station utilisation")
+axes[1, 1].set_xlabel("Average docking station utilisation")
 axes[1, 1].set_ylabel("Frequency")
 
-plt.tight_layout()  # Adjust layout for better spacing
+plt.tight_layout()  
 plt.show()
 
-# 2. Correlation Heatmap
+# Correlation Heatmap
 pandas_df = bike_data_cleaned.select("temperature", "wind_speed", "precipitation", "average_docking_station_utilisation").toPandas()
 plt.figure(figsize=(10, 6))
 sns.heatmap(pandas_df.corr(), annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5)
 plt.title("Correlation Heatmap")
 plt.show()
 
-# Get the last row and prepare next hour input
-last_row = bike_data_cleaned.orderBy("timestamp", ascending=False).limit(1).collect()[0]
+# Request user input for weather data for the next hour
+city_name = input("Enter city name: ")
+temperature = float(input("Enter the temperature (°C): "))
+wind_speed = float(input("Enter wind speed (m/s): "))
+precipitation = float(input("Enter precipitation (mm): "))
+cloudiness = int(input("Enter cloudiness (percentage): "))
+
+# Get the last timestamp for the prediction
+last_row = bike_data.orderBy("timestamp", ascending=False).limit(1).collect()[0]
 current_timestamp = last_row['timestamp']
 next_timestamp = current_timestamp + timedelta(hours=1)
 
-# Define schema for the next hour prediction
+# Define schema for the next hour prediction using user inputs
 next_hour_schema = StructType([
     StructField("timestamp", TimestampType(), True),
     StructField("city_name", StringType(), True),
@@ -179,14 +227,14 @@ next_hour_schema = StructType([
     StructField("cloudiness", FloatType(), True)
 ])
 
-# Create next hour data with updated timestamp
+# Create next hour data with user inputs and the next timestamp
 next_hour_data = spark.createDataFrame([(
     next_timestamp,
-    last_row.city_name,
-    float(last_row.temperature + 1.0),  # Example: assume 1 degree increase
-    float(last_row.wind_speed),
-    float(last_row.precipitation) if last_row.precipitation is not None else 0.0,
-    float(last_row.cloudiness)
+    city_name,
+    temperature,
+    wind_speed,
+    precipitation,
+    cloudiness
 )], schema=next_hour_schema)
 
 # Prepare features for prediction
