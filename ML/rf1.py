@@ -216,14 +216,14 @@ cloudiness = float(input("Enter cloudiness: "))
 
 # Validate and convert the timestamp input
 try:
-    timestamp = datetime.strptime(user_timestamp, "%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
 except ValueError:
     raise ValueError("Invalid date format. Please use YYYY-MM-DD HH:MM:SS format.")
 
 # Define schema for the next hour prediction using user inputs
 next_hour_schema = StructType([
-    StructField("timestamp", TimestampType(), True),
     StructField("city_name", StringType(), True),
+    StructField("timestamp", TimestampType(), True),
     StructField("temperature", FloatType(), True),
     StructField("wind_speed", FloatType(), True),
     StructField("precipitation", FloatType(), True),
@@ -232,8 +232,8 @@ next_hour_schema = StructType([
 
 # Create next hour data with user inputs and the next timestamp
 next_hour_data = spark.createDataFrame([(
-    timestamp,
     city_name,
+    timestamp,
     temperature,
     wind_speed,
     precipitation,
