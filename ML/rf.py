@@ -48,7 +48,7 @@ feature_columns = [
     'temperature', 'wind_speed', 'precipitation', 'cloudiness'
 ]
 assembler = VectorAssembler(inputCols=feature_columns, outputCol="features")
-data = assembler.transform(bike_data_cleaned)
+data = assembler.transform(bike_data)
 
 scaler = StandardScaler(inputCol="features", outputCol="scaled_features")
 scaler_model = scaler.fit(data)
