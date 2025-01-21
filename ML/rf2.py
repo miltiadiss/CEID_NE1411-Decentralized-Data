@@ -58,30 +58,10 @@ bike_data_cleaned = bike_data_cleaned.withColumn("hour_of_day", hour(col("timest
 bike_data_cleaned = bike_data_cleaned.withColumn("day_of_week", dayofweek(col("timestamp")))
 bike_data_cleaned = bike_data_cleaned.withColumn("is_weekend", when((col("day_of_week") == 1) | (col("day_of_week") == 7), 1).otherwise(0))
 
-# Define a window partitioned by city_name and ordered by timestamp
-window_spec = Window.partitionBy("city_name").orderBy("timestamp")
-
-# Add lagged features
-bike_data_cleaned = bike_data_cleaned.withColumn(
-    "average_docking_station_utilisation_lag1",
-    lag("average_docking_station_utilisation", 1).over(window_spec)
-)
-bike_data_cleaned = bike_data_cleaned.withColumn(
-    "average_docking_station_utilisation_lag2",
-    lag("average_docking_station_utilisation", 2).over(window_spec)
-)
-
-# Drop rows with null lagged values (e.g., first few rows in each partition)
-bike_data_cleaned = bike_data_cleaned.dropna(
-    subset=["average_docking_station_utilisation_lag1", "average_docking_station_utilisation_lag2"]
-)
-
 # Feature Scaling
 feature_columns = [
     'temperature', 'wind_speed', 'precipitation', 'cloudiness',
-    'hour_of_day', 'day_of_week', 'is_weekend',
-    'average_docking_station_utilisation_lag1',
-    'average_docking_station_utilisation_lag2'
+    'hour_of_day', 'day_of_week', 'is_weekend'
 ]
 assembler = VectorAssembler(inputCols=feature_columns, outputCol="features")
 data = assembler.transform(bike_data_cleaned)
