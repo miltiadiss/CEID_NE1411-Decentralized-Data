@@ -6,7 +6,7 @@ from pyspark.sql.functions import col, mean, to_timestamp
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 # Initialize Spark session
 spark = SparkSession.builder.appName("Bike Utilization Prediction").getOrCreate()
@@ -208,18 +208,20 @@ plt.show()
 
 # Request user input for weather data for the next hour
 city_name = input("Enter city name: ")
-temperature = float(input("Enter the temperature (°C): "))
-wind_speed = float(input("Enter wind speed (m/s): "))
-precipitation = float(input("Enter precipitation (mm): "))
-cloudiness = int(input("Enter cloudiness (percentage): "))
+temperature = float(input("Enter the temperature: "))
+wind_speed = float(input("Enter wind speed: "))
+precipitation = float(input("Enter precipitation: "))
+cloudiness = float(input("Enter cloudiness: "))
 
-# Convert cloudiness to float
-cloudiness = float(cloudiness)
+# Validate and convert the timestamp input
+try:
+    next_timestamp = datetime.strptime(user_timestamp, "%Y-%m-%d %H:%M:%S")
+except ValueError:
+    raise ValueError("Invalid date format. Please use YYYY-MM-DD HH:MM:SS format.")
 
-# Get the last timestamp for the prediction
-last_row = bike_data.orderBy("timestamp", ascending=False).limit(1).collect()[0]
-current_timestamp = last_row['timestamp']
-next_timestamp = current_timestamp + timedelta(hours=1)
+# Convert user-provided timestamp to datetime object and add one hour
+user_datetime = datetime.strptime(user_timestamp, "%Y-%m-%d %H:%M:%S")
+next_timestamp = user_datetime + timedelta(hours=1)
 
 # Define schema for the next hour prediction using user inputs
 next_hour_schema = StructType([
