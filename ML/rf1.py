@@ -251,4 +251,4 @@ next_hour_prediction = rf_model.transform(next_hour_scaled)
 
 # Extract and display the prediction
 next_hour_result = next_hour_prediction.select("prediction").collect()
-print(f"Predicted utilization for the next hour ({next_timestamp}) is: {next_hour_result[0]['prediction']}")
+print(f"Predicted utilization for the next hour ({timestamp}) is: {next_hour_result[0]['prediction']}")
