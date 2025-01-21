@@ -150,13 +150,13 @@ validation_predictions_df["cumulative_r2"] = 1 - (
 plt.figure(figsize=(14, 8))
 
 # Plot RMSE
-plt.plot(validation_predictions_df.index, train_predictions_df["cumulative_rmse"], label="RMSE", color="blue", linewidth=2)
+plt.plot(validation_predictions_df.index, validation_predictions_df["cumulative_rmse"], label="RMSE", color="blue", linewidth=2)
 
 # Plot MAE
-plt.plot(validation_predictions_df.index, train_predictions_df["cumulative_mae"], label="MAE", color="orange", linewidth=2)
+plt.plot(validation_predictions_df.index, validation_predictions_df["cumulative_mae"], label="MAE", color="orange", linewidth=2)
 
 # Plot R²
-plt.plot(validation_predictions_df.index, train_predictions_df["cumulative_r2"], label="R²", color="green", linewidth=2)
+plt.plot(validation_predictions_df.index, validation_predictions_df["cumulative_r2"], label="R²", color="green", linewidth=2)
 
 # Add labels, title, and legend
 plt.xlabel("Validation Data Samples")
