@@ -207,47 +207,52 @@ sns.heatmap(pandas_df.corr(), annot=True, cmap="coolwarm", fmt=".2f", linewidths
 plt.title("Correlation Heatmap")
 plt.show()
 
-# Get the last row and prepare next hour input
-last_row = bike_data_cleaned.orderBy("timestamp", ascending=False).limit(1).collect()[0]
-current_timestamp = last_row['timestamp']
-next_timestamp = current_timestamp + timedelta(hours=1)
+# Request user input for weather data for the next hour
+city_name = input("Enter city name: ")
+timestamp = input("Enter the date and time for prediction (YYYY-MM-DD HH:MM:SS): ")
+temperature = float(input("Enter the temperature: "))
+wind_speed = float(input("Enter wind speed: "))
+precipitation = float(input("Enter precipitation: "))
+cloudiness = float(input("Enter cloudiness: "))
 
-# Define schema for the next hour prediction
+# Validate and convert the timestamp input
+try:
+    timestamp = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+except ValueError:
+    raise ValueError("Invalid date format. Please use YYYY-MM-DD HH:MM:SS format.")
+
+# Create DataFrame for the user input
 next_hour_schema = StructType([
-    StructField("timestamp", TimestampType(), True),
     StructField("city_name", StringType(), True),
+    StructField("timestamp", TimestampType(), True),
     StructField("temperature", FloatType(), True),
     StructField("wind_speed", FloatType(), True),
     StructField("precipitation", FloatType(), True),
     StructField("cloudiness", FloatType(), True)
 ])
 
-# Create next hour data with updated timestamp
+# Create next hour data with user inputs
 next_hour_data = spark.createDataFrame([(
-    next_timestamp,
-    last_row.city_name,
-    float(last_row.temperature + 1.0),  # Example: assume 1 degree increase
-    float(last_row.wind_speed),
-    float(last_row.precipitation) if last_row.precipitation is not None else 0.0,
-    float(last_row.cloudiness)
+    city_name,
+    timestamp,
+    temperature,
+    wind_speed,
+    precipitation,
+    cloudiness
 )], schema=next_hour_schema)
 
-# Add time-based features for the next hour data
+# Feature Engineering for the user input (generate time-based features)
 next_hour_data = next_hour_data.withColumn("hour_of_day", hour(col("timestamp")))
 next_hour_data = next_hour_data.withColumn("day_of_week", dayofweek(col("timestamp")))
 next_hour_data = next_hour_data.withColumn("is_weekend", when((col("day_of_week") == 1) | (col("day_of_week") == 7), 1).otherwise(0))
 
-# Add lagged features for the next hour prediction
-next_hour_data = next_hour_data.withColumn(
-    "average_docking_station_utilisation_lag1",
-    lit(last_row.average_docking_station_utilisation)
-)
-next_hour_data = next_hour_data.withColumn(
-    "average_docking_station_utilisation_lag2",
-    lit(last_row.average_docking_station_utilisation_lag1)
-)
+# Define the feature columns for prediction (weather and time-based features)
+next_hour_feature_columns = [
+    'temperature', 'wind_speed', 'precipitation', 'cloudiness',
+    'hour_of_day', 'day_of_week', 'is_weekend'
+]
 
-# Prepare features for prediction
+# Assemble features for prediction
 next_hour_features = assembler.transform(next_hour_data)
 
 # Scale the features for the next hour
@@ -258,4 +263,4 @@ next_hour_prediction = rf_model.transform(next_hour_scaled)
 
 # Extract and display the prediction
 next_hour_result = next_hour_prediction.select("prediction").collect()
-print(f"Predicted utilization for the next hour ({next_timestamp}) is: {next_hour_result[0]['prediction']}")
+print(f"Predicted utilization for the next hour ({timestamp}) is: {next_hour_result[0]['prediction']}")
