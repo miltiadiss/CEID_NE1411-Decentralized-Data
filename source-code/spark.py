@@ -9,7 +9,7 @@ spark = SparkSession.builder \
     .appName("KafkaMultiTopicStreaming") \
     .getOrCreate()
 
-# [Previous schema definitions remain the same...]
+# Schema definitions for topics
 stationInfoSchema = StructType([
     StructField("station_id", StringType(), True),
     StructField("capacity", IntegerType(), True),
@@ -27,7 +27,6 @@ dataSchema2 = StructType([StructField("stations", ArrayType(stationStatusSchema)
 kafkaSchema1 = StructType([StructField("last_updated", IntegerType(), True), StructField("ttl", IntegerType(), True), StructField("data", dataSchema1, True)])
 kafkaSchema2 = StructType([StructField("last_updated", IntegerType(), True), StructField("ttl", IntegerType(), True), StructField("data", dataSchema2, True)])
 
-# [Previous DataFrame definitions remain the same...]
 # Read station information
 stationInfoDF = spark.readStream \
     .format("kafka") \
@@ -110,7 +109,7 @@ finalDF = windowedStatsDF.join(
     col("std_dev_docking_station_utilisation")
 )
 
-# Function to write DataFrame to CSV with timestamp in filename
+# Function to write DataFrame to CSV
 def writeToCSV(df, epoch_id):
     # Get current timestamp for filename
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
