@@ -12,9 +12,6 @@ spark = SparkSession.builder \
 # [Previous schema definitions remain the same...]
 stationInfoSchema = StructType([
     StructField("station_id", StringType(), True),
-    StructField("name", StringType(), True),
-    StructField("lat", DoubleType(), True),
-    StructField("lon", DoubleType(), True),
     StructField("capacity", IntegerType(), True),
 ])
 
@@ -42,9 +39,6 @@ stationInfoDF = spark.readStream \
     .select(explode("data.data.stations").alias("station")) \
     .select(
         col("station.station_id").alias("station_id"),
-        col("station.name").alias("name"),
-        col("station.lat").alias("latitude"),
-        col("station.lon").alias("longitude"),
         col("station.capacity").alias("capacity"),
         lit("Dubai").alias("city_name")
     )
