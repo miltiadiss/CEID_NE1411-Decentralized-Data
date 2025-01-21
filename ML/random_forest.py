@@ -7,7 +7,7 @@ from pyspark.sql.window import Window
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-from datetime import timedelta
+from datetime import datetime
 
 # Initialize Spark session
 spark = SparkSession.builder.appName("Bike Utilization Prediction").getOrCreate()
@@ -58,30 +58,10 @@ bike_data_cleaned = bike_data_cleaned.withColumn("hour_of_day", hour(col("timest
 bike_data_cleaned = bike_data_cleaned.withColumn("day_of_week", dayofweek(col("timestamp")))
 bike_data_cleaned = bike_data_cleaned.withColumn("is_weekend", when((col("day_of_week") == 1) | (col("day_of_week") == 7), 1).otherwise(0))
 
-# Define a window partitioned by city_name and ordered by timestamp
-window_spec = Window.partitionBy("city_name").orderBy("timestamp")
-
-# Add lagged features
-bike_data_cleaned = bike_data_cleaned.withColumn(
-    "average_docking_station_utilisation_lag1",
-    lag("average_docking_station_utilisation", 1).over(window_spec)
-)
-bike_data_cleaned = bike_data_cleaned.withColumn(
-    "average_docking_station_utilisation_lag2",
-    lag("average_docking_station_utilisation", 2).over(window_spec)
-)
-
-# Drop rows with null lagged values (e.g., first few rows in each partition)
-bike_data_cleaned = bike_data_cleaned.dropna(
-    subset=["average_docking_station_utilisation_lag1", "average_docking_station_utilisation_lag2"]
-)
-
 # Feature Scaling
 feature_columns = [
     'temperature', 'wind_speed', 'precipitation', 'cloudiness',
-    'hour_of_day', 'day_of_week', 'is_weekend',
-    'average_docking_station_utilisation_lag1',
-    'average_docking_station_utilisation_lag2'
+    'hour_of_day', 'day_of_week', 'is_weekend'
 ]
 assembler = VectorAssembler(inputCols=feature_columns, outputCol="features")
 data = assembler.transform(bike_data_cleaned)
@@ -93,7 +73,7 @@ data = scaler_model.transform(data)
 data = data.select("scaled_features", "average_docking_station_utilisation")
 
 # Split dataset
-train_data, test_data = data.randomSplit([0.8, 0.2], seed=42)
+train_data, validation_data = data.randomSplit([0.8, 0.2], seed=42)
 
 # Train Random Forest Regressor
 rf_regressor = RandomForestRegressor(
@@ -108,13 +88,13 @@ rf_regressor = RandomForestRegressor(
 )
 rf_model = rf_regressor.fit(train_data)
 
-# Evaluate the model on training data
+# Evaluate the model on the training data
 train_predictions = rf_model.transform(train_data)
 
-# Convert predictions to Pandas DataFrame
+# Convert predictions to Pandas DataFrame for further analysis
 train_predictions_df = train_predictions.select("prediction", "average_docking_station_utilisation").toPandas()
 
-# Calculate metrics for each prediction
+# Calculate additional metrics for each prediction
 train_predictions_df["absolute_error"] = abs(train_predictions_df["prediction"] - train_predictions_df["average_docking_station_utilisation"])
 train_predictions_df["squared_error"] = (train_predictions_df["prediction"] - train_predictions_df["average_docking_station_utilisation"]) ** 2
 
@@ -126,7 +106,7 @@ train_predictions_df["cumulative_r2"] = 1 - (
     / ((train_predictions_df["average_docking_station_utilisation"] - train_predictions_df["average_docking_station_utilisation"].mean()) ** 2).sum()
 )
 
-# Plot training metrics
+# Plot the training metrics
 plt.figure(figsize=(14, 8))
 
 # Plot RMSE
@@ -149,7 +129,48 @@ plt.tight_layout()
 # Show the plot
 plt.show()
 
-# 1. Feature Distribution (Histograms for all features in the same window using subplots)
+# Evaluate the model on validation data
+validation_predictions = rf_model.transform(validation_data)
+
+# Convert predictions to Pandas DataFrame
+validation_predictions_df = validation_predictions.select("prediction", "average_docking_station_utilisation").toPandas()
+
+# Calculate metrics for each prediction
+validation_predictions_df["absolute_error"] = abs(validation_predictions_df["prediction"] - validation_predictions_df["average_docking_station_utilisation"])
+validation_predictions_df["squared_error"] = (validation_predictions_df["prediction"] - validation_predictions_df["average_docking_station_utilisation"]) ** 2
+
+# Cumulative metrics calculations
+validation_predictions_df["cumulative_rmse"] = (validation_predictions_df["squared_error"].expanding().mean()) ** 0.5
+validation_predictions_df["cumulative_mae"] = validation_predictions_df["absolute_error"].expanding().mean()
+validation_predictions_df["cumulative_r2"] = 1 - (
+    validation_predictions_df["squared_error"].expanding().sum()
+    / ((validation_predictions_df["average_docking_station_utilisation"] - validation_predictions_df["average_docking_station_utilisation"].mean()) ** 2).sum()
+)
+
+# Plot validation metrics
+plt.figure(figsize=(14, 8))
+
+# Plot RMSE
+plt.plot(validation_predictions_df.index, validation_predictions_df["cumulative_rmse"], label="RMSE", color="blue", linewidth=2)
+
+# Plot MAE
+plt.plot(validation_predictions_df.index, validation_predictions_df["cumulative_mae"], label="MAE", color="orange", linewidth=2)
+
+# Plot R²
+plt.plot(validation_predictions_df.index, validation_predictions_df["cumulative_r2"], label="R²", color="green", linewidth=2)
+
+# Add labels, title, and legend
+plt.xlabel("Validation Data Samples")
+plt.ylabel("Metric Value")
+plt.title("Validation Metrics Across All Predictions")
+plt.legend()
+plt.grid(True, linestyle="--", alpha=0.7)
+plt.tight_layout()
+
+# Show the plot
+plt.show()
+
+# Features Distribution
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))  # 2x2 grid for subplots
 
 # Plot for temperature
@@ -170,63 +191,68 @@ axes[1, 0].set_title("Distribution of Precipitation")
 axes[1, 0].set_xlabel("Precipitation")
 axes[1, 0].set_ylabel("Frequency")
 
-# Plot for average docking station utilisation
+# Plot for average_docking_station_utilisation
 sns.histplot(bike_data_cleaned.select("average_docking_station_utilisation").toPandas(), kde=True, ax=axes[1, 1])
 axes[1, 1].set_title("Distribution of Average docking station utilisation")
 axes[1, 1].set_xlabel("Average docking station utilisation")
 axes[1, 1].set_ylabel("Frequency")
 
-plt.tight_layout()  # Adjust layout for better spacing
+plt.tight_layout()  
 plt.show()
 
-# 2. Correlation Heatmap
+# Correlation Heatmap
 pandas_df = bike_data_cleaned.select("temperature", "wind_speed", "precipitation", "average_docking_station_utilisation").toPandas()
 plt.figure(figsize=(10, 6))
 sns.heatmap(pandas_df.corr(), annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5)
 plt.title("Correlation Heatmap")
 plt.show()
 
-# Get the last row and prepare next hour input
-last_row = bike_data_cleaned.orderBy("timestamp", ascending=False).limit(1).collect()[0]
-current_timestamp = last_row['timestamp']
-next_timestamp = current_timestamp + timedelta(hours=1)
+# Request user input for weather data for the next hour
+city_name = input("Enter city name: ")
+timestamp = input("Enter the date and time for prediction (YYYY-MM-DD HH:MM:SS): ")
+temperature = float(input("Enter the temperature: "))
+wind_speed = float(input("Enter wind speed: "))
+precipitation = float(input("Enter precipitation: "))
+cloudiness = float(input("Enter cloudiness: "))
 
-# Define schema for the next hour prediction
+# Validate and convert the timestamp input
+try:
+    timestamp = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+except ValueError:
+    raise ValueError("Invalid date format. Please use YYYY-MM-DD HH:MM:SS format.")
+
+# Create DataFrame for the user input
 next_hour_schema = StructType([
-    StructField("timestamp", TimestampType(), True),
     StructField("city_name", StringType(), True),
+    StructField("timestamp", TimestampType(), True),
     StructField("temperature", FloatType(), True),
     StructField("wind_speed", FloatType(), True),
     StructField("precipitation", FloatType(), True),
     StructField("cloudiness", FloatType(), True)
 ])
 
-# Create next hour data with updated timestamp
+# Create next hour data with user inputs
 next_hour_data = spark.createDataFrame([(
-    next_timestamp,
-    last_row.city_name,
-    float(last_row.temperature + 1.0),  # Example: assume 1 degree increase
-    float(last_row.wind_speed),
-    float(last_row.precipitation) if last_row.precipitation is not None else 0.0,
-    float(last_row.cloudiness)
+    city_name,
+    timestamp,
+    temperature,
+    wind_speed,
+    precipitation,
+    cloudiness
 )], schema=next_hour_schema)
 
-# Add time-based features for the next hour data
+# Feature Engineering for the user input (generate time-based features)
 next_hour_data = next_hour_data.withColumn("hour_of_day", hour(col("timestamp")))
 next_hour_data = next_hour_data.withColumn("day_of_week", dayofweek(col("timestamp")))
 next_hour_data = next_hour_data.withColumn("is_weekend", when((col("day_of_week") == 1) | (col("day_of_week") == 7), 1).otherwise(0))
 
-# Add lagged features for the next hour prediction
-next_hour_data = next_hour_data.withColumn(
-    "average_docking_station_utilisation_lag1",
-    lit(last_row.average_docking_station_utilisation)
-)
-next_hour_data = next_hour_data.withColumn(
-    "average_docking_station_utilisation_lag2",
-    lit(last_row.average_docking_station_utilisation_lag1)
-)
+# Define the feature columns for prediction (weather and time-based features)
+next_hour_feature_columns = [
+    'temperature', 'wind_speed', 'precipitation', 'cloudiness',
+    'hour_of_day', 'day_of_week', 'is_weekend'
+]
 
-# Prepare features for prediction
+# Assemble features for prediction
 next_hour_features = assembler.transform(next_hour_data)
 
 # Scale the features for the next hour
@@ -237,4 +263,4 @@ next_hour_prediction = rf_model.transform(next_hour_scaled)
 
 # Extract and display the prediction
 next_hour_result = next_hour_prediction.select("prediction").collect()
-print(f"Predicted utilization for the next hour ({next_timestamp}) is: {next_hour_result[0]['prediction']}")
+print(f"Predicted utilization for the next hour ({timestamp}) is: {next_hour_result[0]['prediction']}")
