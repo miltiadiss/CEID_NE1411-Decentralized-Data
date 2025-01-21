@@ -30,6 +30,7 @@ schema = StructType([
 file_path = '/home/debian/spark-3.5.3-bin-hadoop3/spark_data.csv'  # Path to the CSV file
 bike_data = spark.read.csv(file_path, header=True, schema=schema)
 
+# Data Preprocessing
 # Calculate mean for 'precipitation' column
 mean_precipitation = bike_data.select(mean(col("precipitation"))).collect()[0][0]
 
@@ -43,7 +44,6 @@ mean_precipitation = float(mean_precipitation)
 # Replace NULL values with the mean
 bike_data = bike_data.fillna({"precipitation": mean_precipitation})
 
-# Data Preprocessing
 for column in ['temperature', 'wind_speed', 'precipitation', 'cloudiness']:
     mean_value = bike_data.select(mean(col(column))).collect()[0][0]
     bike_data = bike_data.fillna({column: mean_value})
@@ -72,6 +72,7 @@ data = scaler_model.transform(data)
 
 data = data.select("scaled_features", "average_docking_station_utilisation")
 
+# Train and evaluate model
 # Split dataset
 train_data, validation_data = data.randomSplit([0.8, 0.2], seed=42)
 
@@ -207,6 +208,7 @@ sns.heatmap(pandas_df.corr(), annot=True, cmap="coolwarm", fmt=".2f", linewidths
 plt.title("Correlation Heatmap")
 plt.show()
 
+# Prediction
 # Request user input for weather data for the next hour
 city_name = input("Enter city name: ")
 timestamp = input("Enter the date and time for prediction (YYYY-MM-DD HH:MM:SS): ")
