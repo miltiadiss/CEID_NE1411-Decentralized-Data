@@ -93,7 +93,7 @@ data = scaler_model.transform(data)
 data = data.select("scaled_features", "average_docking_station_utilisation")
 
 # Split dataset
-train_data, test_data = data.randomSplit([0.8, 0.2], seed=42)
+train_data, validation_data = data.randomSplit([0.8, 0.2], seed=42)
 
 # Train Random Forest Regressor
 rf_regressor = RandomForestRegressor(
