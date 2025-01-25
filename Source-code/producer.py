@@ -12,13 +12,16 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('kafka_producer.log'),
+        #logs to a file
+        logging.FileHandler('kafka_producer.log'), 
+        #logs to the console
         logging.StreamHandler(sys.stdout)
     ]
 )
 logger = logging.getLogger(__name__)
 
 # JSON Schemas for data validation
+# Schema for validating weather data
 WEATHER_SCHEMA = {
     "type": "object",
     "required": ["main", "weather", "wind"],
@@ -52,6 +55,7 @@ WEATHER_SCHEMA = {
     }
 }
 
+# Schema for validating station information data
 STATION_INFO_SCHEMA = {
     "type": "object",
     "required": ["data", "last_updated"],
@@ -79,7 +83,7 @@ STATION_INFO_SCHEMA = {
         "last_updated": {"type": "number"}
     }
 }
-
+# Schema for validating station status data
 STATION_STATUS_SCHEMA = {
     "type": "object",
     "required": ["data", "last_updated"],
@@ -111,34 +115,30 @@ STATION_STATUS_SCHEMA = {
 conf = {'bootstrap.servers': 'localhost:9092'}
 producer = Producer(conf)
 
-# API endpoints
+# URLs for weather data, station information, and station status
 weather_url = "https://api.openweathermap.org/data/2.5/weather?lat=25.276987&lon=55.296249&appid=26d2a4e587fc68ba1d98399638a19231"
 station_info_url = "https://dubai.publicbikesystem.net/customer/gbfs/v2/en/station_information"
 station_status_url = "https://dubai.publicbikesystem.net/customer/gbfs/v2/en/station_status"
 
+#Validate JSON data against a given schema.
 def validate_data(data: Dict[str, Any], schema: Dict[str, Any]) -> bool:
-    """
-    Validate JSON data against a given schema.
-    """
     try:
-        jsonschema.validate(instance=data, schema=schema)
+        jsonschema.validate(instance=data, schema=schema)  
         return True
     except jsonschema.exceptions.ValidationError as e:
         logger.error(f"Data validation error: {e}")
         return False
 
+#Fetch data from an API with rate limiting, retries, and error handling.  
 def fetch_data(url: str, max_retries: int = 5) -> Optional[Dict[str, Any]]:
-    """
-    Fetch data from an API with rate limiting, retries, and error handling.
-    """
     retries = 0
     backoff = 1  # Start with a 1-second backoff
     while retries < max_retries:
         try:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()  # Raise exception for bad status codes
+            response = requests.get(url, timeout=10) # Make a GET request
+            response.raise_for_status()  
             
-            data = response.json()
+            data = response.json() # Parse the JSON response
             
             # Validate data based on URL
             if 'weather' in url:
@@ -156,7 +156,7 @@ def fetch_data(url: str, max_retries: int = 5) -> Optional[Dict[str, Any]]:
         
         except requests.exceptions.RequestException as e:
             logger.error(f"Request error for {url}: {e}")
-            time.sleep(backoff)
+            time.sleep(backoff) # Wait before retrying
             backoff *= 2  # Exponential backoff
             retries += 1
         except json.JSONDecodeError as e:
@@ -166,10 +166,9 @@ def fetch_data(url: str, max_retries: int = 5) -> Optional[Dict[str, Any]]:
     logger.error(f"Failed to fetch data from {url} after {max_retries} retries.")
     return None
 
+
+# Kafka message delivery callback with console and file logging.
 def delivery_report(err, msg):
-    """
-    Kafka message delivery callback with console and file logging.
-    """
     if err is not None:
         print(f"Message delivery FAILED: {err}")
         logger.error(f"Message delivery failed: {err}")
@@ -177,32 +176,29 @@ def delivery_report(err, msg):
         print(f"Message delivered to {msg.topic()}")
         logger.info(f"Message delivered to {msg.topic()}")
 
+#Continuously fetch and produce data to Kafka topics with error handling.
 def produce_data():
-    """
-    Continuously fetch and produce data to Kafka topics with error handling.
-    Sends data immediately when the script starts and then at specified intervals.
-    """
     print("Starting Kafka Producer...")
-    
-    # Track the last fetch times
-    last_weather_update = 0  # Initialize to 0 to ensure immediate fetching
-    last_station_update = 0  # Initialize to 0 to ensure immediate fetching
+
+    # Initialize to 0 to ensure immediate fetching
+    last_weather_update = 0  
+    last_station_update = 0  
     
     try:
         while True:
             print("\n--- Fetching Data ---")
             current_time = time.time()
             
-            # Fetch Weather API every 1 hour (3600 seconds)
-            if current_time - last_weather_update >= 3600 or last_weather_update == 0:  # 1 hour or first run
+            # Fetch Weather API every 1 hour or first run
+            if current_time - last_weather_update >= 3600 or last_weather_update == 0:  
                 weather_data = fetch_data(weather_url)
                 if weather_data:
                     print("Weather data fetched successfully")
                     producer.produce('weather_topic', key='weather', value=json.dumps(weather_data), callback=delivery_report)
                     last_weather_update = current_time  # Update the last fetch time
 
-            # Fetch Station Info and Status API every 5 minutes (300 seconds)
-            if current_time - last_station_update >= 300 or last_station_update == 0:  # 5 minutes or first run
+            # Fetch Station Info and Status API every 5 minutes or first run
+            if current_time - last_station_update >= 300 or last_station_update == 0: 
                 station_info_data = fetch_data(station_info_url)
                 if station_info_data:
                     print("Station Info data fetched successfully")
@@ -223,13 +219,13 @@ def produce_data():
         print(f"Unhandled exception: {e}")
         logger.critical(f"Unhandled exception in produce_data: {e}")
     finally:
-        producer.flush()
-        producer.close()
+        producer.flush()  # Ensure no messages are left in the buffer
+        producer.close()  # Close the producer
 
 if __name__ == "__main__":
     try:
         print("Kafka Producer is starting...")
-        produce_data()
+        produce_data()  # Start producing data
     except KeyboardInterrupt:
         print("\nKafka Producer stopped by user")
         logger.info("Kafka Producer stopped by user")
