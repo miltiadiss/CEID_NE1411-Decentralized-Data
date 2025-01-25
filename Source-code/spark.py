@@ -118,15 +118,7 @@ def writeToCSV(df, epoch_id):
     df.write \
         .mode("append") \
         .csv(f"bike_usage_statistics/date={timestamp[:8]}", header=True)
-
-# Write to console for monitoring
-consoleQuery = finalDF.writeStream \
-    .outputMode("append") \
-    .format("console") \
-    .trigger(processingTime='10 minutes') \
-    .option("truncate", "false") \
-    .start()
-
+    
 # Write to CSV
 csvQuery = finalDF.writeStream \
     .outputMode("append") \
