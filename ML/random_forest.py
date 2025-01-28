@@ -2,8 +2,7 @@ from pyspark.sql import SparkSession
 from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml.regression import RandomForestRegressor
 from pyspark.sql.types import StructType, StructField, FloatType, TimestampType, StringType, IntegerType
-from pyspark.sql.functions import col, mean, to_timestamp, lit, hour, dayofweek, when, lag
-from pyspark.sql.window import Window
+from pyspark.sql.functions import col, mean, to_timestamp, lit, hour, dayofweek, when
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
