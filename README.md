@@ -1,45 +1,9 @@
 # Overview
 This project is part of **Decentralized Data Technologies** elective course in Computer Engineering & Informatics Department of University of Patras for Winter Semester 2024-2025 (Semester 9).
 
-![image](https://github.com/user-attachments/assets/b909ec1f-3d32-4db2-b6b6-0c302ac3b3ef)
-
 This project involves the implementation of a real-time bike-sharing analytics system using decentralized data technologies. It integrates live data from bike-sharing systems and weather APIs, processes it using **Apache Kafka** for streaming and **Apache Spark** for distributed processing and builds a **machine learning model** to predict bike utilization. The system performs tasks such as data ingestion, real-time analysis, utilization rate calculations, and next-hour predictions while adhering to scalable and efficient software engineering practices.
 
-## Data Creation
-1. **Data Sources**:
-   - **Bike-Sharing Data** (via GBFS API):
-     - Station Information: Static data such as station names, locations, and capacities.
-     - Station Status: Real-time data on bike availability and dock usage.
-   - **Weather Data** (via OpenWeatherMap API):
-     - Parameters: Temperature, precipitation, wind speed, and cloudiness.
-   - Data is collected at regular intervals (e.g., every 5 minutes).
-
-2. **Features Generated**:
-   - **Time-Based Features**: `hour_of_day`, `day_of_week`, and `is_weekend`.
-   - **Weather Metrics**: Temperature, wind speed, precipitation, and cloudiness.
-   - **Docking Station Metrics**: Average, max, min, and standard deviation of utilization rates.
-
-## Goals
-1. **Real-Time Analytics**:
-   - Calculate utilization rates for docking stations and cities in real-time.
-   - Correlate weather conditions with bike utilization.
-2. **Machine Learning**:
-   - Predict on-demand bike utilization for the next hour using a regression model.
-3. **Scalability**:
-   - Handle increasing data volumes efficiently with distributed computing frameworks.
-
-## Programming Environment and Tools
-1. **Programming Language**:
-   - Python for API integration, data processing, and machine learning.
-2. **Frameworks and Libraries**:
-   - **Apache Kafka**: For real-time data streaming and message queuing.
-   - **Apache Spark**: For distributed data processing and machine learning pipelines (SparkML).
-   - **Pandas**, **Matplotlib**, and **Seaborn**: For exploratory data analysis and visualization.
-3. **APIs**:
-   - GBFS API for bike-sharing data.
-   - OpenWeatherMap API for weather data.
-4. **Storage**:
-   - Distributed database or storage solutions (e.g., PostgreSQL, HDFS).
+![image](https://github.com/user-attachments/assets/b909ec1f-3d32-4db2-b6b6-0c302ac3b3ef)
 
 ## Pipeline
 ### 1. Data Ingestion
@@ -61,13 +25,13 @@ This project involves the implementation of a real-time bike-sharing analytics s
   - Correlate utilization with weather conditions.
   - Generate hourly usage summaries.
 - **Storage**:
-  - Save processed data into a distributed database.
+  - Save processed data into a csv file for ease.
 
 ### 3. Machine Learning
 - **Training Data**:
-  - Collect and store data over a specific period (e.g., 7 days).
+  - Collect and store data over a period of 6 days.
 - **Regression Model**:
-  - Train a model using SparkML with features such as time and weather metrics.
+  - Train The model using SparkML with features such as time and weather metrics.
   - Predict bike utilization for the next hour.
 - **Evaluation**:
   - Assess model performance using metrics like RMSE, MAE, and R².
@@ -81,3 +45,27 @@ This project involves the implementation of a real-time bike-sharing analytics s
 ### 5. User Input and Prediction
 - Accept user inputs for weather and time to predict next-hour utilization.
 - Provide actionable insights for operational improvements.
+
+## Data Creation
+1. **Data Sources**:
+   - **Bike-Sharing Data** (via GBFS API):
+     - **Station Information**: Static data such as station names, locations, capacities.
+     - **Station Status**: Real-time data on bike availability and dock usage.
+   - **Weather Data** (via OpenWeatherMap API):
+     - **Weather Information**: temperature, precipitation, wind speed, cloudiness.
+   - Data is also collected at regular intervals.
+
+2. **Extra Features Generated**:
+   - **Time-Based Features for ML**: hour_of_day, day_of_week, is_weekend. These are used for **Feature Engineering** during the ML Model training phase.
+   - **Docking Station Metrics**: average, max, min, and standard deviation of utilization rates of docking stations.
+
+## Goals
+1. **Real-Time Analytics**:
+   - Calculate utilization rates for docking stations and cities in real-time.
+   - Correlate weather conditions with bike utilization.
+2. **Machine Learning**:
+   - Predict on-demand bike utilization for the next hour using a regression model. We chose a **Random Forest Regressor**.
+3. **Scalability**:
+   - Handle increasing data volumes efficiently with distributed computing frameworks.
+
+## Programming Environment and Tools
