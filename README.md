@@ -69,3 +69,4 @@ This project involves the implementation of a real-time bike-sharing analytics s
    - Handle increasing data volumes efficiently with distributed computing frameworks.
 
 ## Programming Environment and Tools
+Python, Linux (Ubuntu or Debian 12.8)
